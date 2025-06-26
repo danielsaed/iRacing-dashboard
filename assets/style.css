@@ -1,6 +1,11 @@
 body {
-  margin: 0;
+  margin: 10px;
   padding: 0;
   background-color: #111111;
-  color: #7FDBFF;
+  color: #ffffff;
+}
+
+p {
+   margin-bottom: 0;
+   text-align : center;
 }
