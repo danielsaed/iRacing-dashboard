@@ -37,10 +37,31 @@ def create_histogram_with_percentiles(df, column='IRATING', nbins=400):
     )
     return fig
 
+country_flags = {
+    'ES': '🇪🇸', 'US': '🇺🇸', 'BR': '🇧🇷', 'DE': '🇩🇪', 'FR': '🇫🇷', 'IT': '🇮🇹',
+    'GB': '🇬🇧', 'PT': '🇵🇹', 'NL': '🇳🇱', 'AU': '🇦🇺', 'JP': '🇯🇵', 'CA': '🇨🇦',
+    'AR': '🇦🇷', 'MX': '🇲🇽', 'CL': '🇨🇱', 'BE': '🇧🇪', 'FI': '🇫🇮', 'SE': '🇸🇪',
+    'NO': '🇳🇴', 'DK': '🇩🇰', 'IE': '🇮🇪', 'CH': '🇨🇭', 'AT': '🇦🇹', 'PL': '🇵🇱',
+    # ...agrega los que necesites...
+}
+
 # --- 1. Carga y Preparación de Datos ---
 df = pd.read_csv('Sports_Car_driver_stats.csv')
 df = df[df['IRATING'] > 100]
-df = df[df['IRATING'] < 10000]
+#df = df[df['IRATING'] < 10000]
+df = df[['DRIVER','IRATING','LOCATION','STARTS','WINS']]
+
+def flag_img(code):
+    url = f"https://flagcdn.com/16x12/{code.lower()}.png"
+    if code in country_flags:
+        return f'![{code}]({url})'
+    else:
+        return f'`{code}`' 
+
+# Aplica solo el emoji/código si está en country_flags, si no deja el valor original
+df['LOCATION'] = df['LOCATION'].map(lambda x: flag_img(x) if x in country_flags else x)
+#df['LOCATION'] = 'a'
+
 # --- 2. Creación de Componentes Gráficos ---
 
 # Gráfico de dispersión con tema oscuro
@@ -56,26 +77,41 @@ df = df[df['IRATING'] < 10000]
 )'''
 scatter_plot = dcc.Graph(
     id='scatter-plot',
-    style={'height': '50vh'},
+    style={'height': '70vh'},
     figure=create_histogram_with_percentiles(df, 'IRATING', 400)
 )
 
 # Tabla con paginación del lado del servidor
 interactive_table = dash_table.DataTable(
     id='datatable-interactiva',
-    columns=[{"name": i, "id": i} for i in df.columns],
+    columns=[
+        {"name": i, "id": i, "presentation": "markdown",'type': 'text'} if i == "LOCATION" else {"name": i, "id": i}
+        for i in df.columns
+    ],
     data=[],  # Inicialmente vacía
-    sort_action="custom",  # Ordenamiento del lado del servidor
+    sort_action="custom",
     sort_mode="single",
-    page_action="custom",  # Paginación del lado del servidor
+    page_action="custom",
     page_current=0,
-    page_size=50,
-    page_count=len(df) // 50 + (1 if len(df) % 50 > 0 else 0),
-    style_table={'overflowX': 'auto', 'height': '70vh'},
+    page_size=20,
+    page_count=len(df) // 20 + (1 if len(df) % 20 > 0 else 0),
+    virtualization=False,
     style_as_list_view=True,
+    style_table={
+        'overflowX': 'auto',
+        'height': '70vh',
+        'minHeight': '0',
+        'width': '100%'
+        
+    },
+    style_data={
+            'textAlign': 'center',
+            'fontWeight': 'bold',
+            'fontSize': 12,},
+
     style_cell={
-        'textAlign': 'left',
-        'padding': '5px',
+        'textAlign': 'center',
+        'padding': '1px',
         'backgroundColor': 'rgb(50, 50, 50)',
         'color': 'white',
         'minWidth': '100px',
@@ -87,52 +123,68 @@ interactive_table = dash_table.DataTable(
         'backgroundColor': 'rgb(17, 17, 17)',
         'fontWeight': 'bold',
         'color': 'white',
-        'border': 'none'
-    },
-    virtualization=True  # Renderizado virtual
+        'border': 'none',
+        'textAlign': 'center'
+    }
+     # Renderizado virtual
 )
 
 # --- 3. Inicialización de la App ---
 app = dash.Dash(__name__)
 
 # Layout principal
-app.layout = html.Div(children=[
-    html.H1("Dashboard Interactivo - 300k Registros", style={'textAlign': 'center'}),
-    
-    # Controles adicionales
-    html.Div([
-        html.Label("Filtro rápido por país:"),
-        dcc.Dropdown(
-            id='country-filter',
-            options=[{'label': 'Todos', 'value': 'ALL'}] + 
-                   [{'label': country, 'value': country} for country in df['LOCATION'].dropna().unique()],
-            value='ALL',
-            style={'width': '200px', 'margin': '10px'}
-        )
-    ]),
-
-    # Contenedor Flex para las columnas
-    html.Div(
-        style={'display': 'flex'},
-        children=[
-            # Columna Izquierda (Tabla)
-            html.Div(
-                style={'width': '50%', 'padding': '10px'},
-                children=[
-                    html.H2("Tabla de Datos"),
-                    interactive_table
-                ]
-            ),
-            # Columna Derecha (Gráfico)
-            html.Div(
-                style={'width': '50%', 'padding': '10px'},
-                children=[
-                    scatter_plot
-                ]
+app.layout = html.Div(
+    style={'height': '100vh', 'display': 'flex', 'flexDirection': 'column'},
+    children=[
+        html.H1("Dashboard Interactivo - 300k Registros", style={'textAlign': 'center'}),
+        html.Div([
+            html.Label("Filtro rápido por país:"),
+            dcc.Dropdown(
+                id='country-filter',
+                options=[{'label': 'Todos', 'value': 'ALL'}] + 
+                       [{'label': country, 'value': country} for country in df['LOCATION'].dropna().unique()],
+                value='ALL',
+                style={'width': '200px', 'margin': '10px'}
             )
-        ]
-    )
-])
+        ]),
+        html.Div(
+            style={'display': 'flex', 'flex': 1, 'minHeight': 0},
+            children=[
+                # Columna Izquierda (Tabla)
+                html.Div(
+                    style={
+                        'width': '30%',
+                        'height': '100%',
+                        'padding': '10px',
+                        'display': 'flex',
+                        'flexDirection': 'column',
+                        'minHeight': 0
+                    },
+                    children=[
+                        html.H2("Tabla de Datos", style={'margin': 0}),
+                        html.Div(
+                            interactive_table,
+                            style={
+                                'flex': 1,
+                                'minHeight': 0,
+                                'display': 'flex',
+                                'flexDirection': 'column',
+                                'height': '100%'
+                            }
+                        )
+                    ]
+                ),
+                # Columna Derecha (Gráfico)
+                html.Div(
+                    style={'width': '70%', 'padding-left': '3%'},
+                    children=[
+                        scatter_plot
+                    ]
+                )
+            ]
+        )
+    ]
+)
 
 # --- 4. Callbacks ---
 @app.callback(
