@@ -5,12 +5,21 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-def create_histogram_with_percentiles(df, column='IRATING', nbins=400):
-    hist, bin_edges = np.histogram(df[column], bins=nbins)
+
+def create_histogram_with_percentiles(df, column='IRATING', bin_width=100):
+    # Crear bins específicos de 100 en 100
+    min_val = df[column].min()
+    max_val = df[column].max()
+    bin_edges = np.arange(min_val, max_val + bin_width, bin_width)
+    
+    hist, bin_edges = np.histogram(df[column], bins=bin_edges)
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
     bin_widths = bin_edges[1:] - bin_edges[:-1]
     total = len(df)
     hover_text = []
+    
+    # Transformación personalizada para hacer más visibles los valores pequeños
+    hist_transformed = []
     for i in range(len(hist)):
         # Percentil: % de pilotos con menos iRating que el límite inferior del bin superior
         below = (df[column] < bin_edges[i+1]).sum()
@@ -21,20 +30,32 @@ def create_histogram_with_percentiles(df, column='IRATING', nbins=400):
             f"Pilotos: {hist[i]}<br>"
             f"Top: {top_percent:.2f}%"
         )
+        
+        # Transformación: valores pequeños (0-50) los amplificamos
+        if hist[i] <= 50 and hist[i] > 0:
+            hist_transformed.append(hist[i] + 50)  # Les sumamos 25 para hacerlos más visibles
+        else:
+            hist_transformed.append(hist[i])  # Valores normales sin cambio
+    
     fig = go.Figure(data=go.Bar(
         x=bin_centers,
-        y=hist,
-        width=bin_widths * 0.9,
-        hovertext=hover_text,
+        y=hist_transformed,  # <-- Usamos los valores transformados para visualización
+        width=bin_widths * 1,
+        hovertext=hover_text,  # <-- Pero en el hover mostramos los valores reales
         hovertemplate='%{hovertext}<extra></extra>',
-        marker=dict(color=hist, colorscale='Viridis')
+        marker=dict(color=hist, colorscale='Viridis')  # <-- Color basado en valores reales
     ))
+    
     fig.update_layout(
-        title='Distribución de iRating',
+        title='Distribución de iRating (Valores pequeños amplificados)',
         xaxis_title='iRating',
-        yaxis_title='Cantidad de Pilotos',
-        template='plotly_dark'
+        yaxis_title='Cantidad de Pilotos (escala ajustada)',
+        template='plotly_dark',
+        hovermode='x unified',
+        xaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
+        yaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
     )
+    
     return fig
 
 country_flags = {
@@ -78,7 +99,7 @@ df['LOCATION'] = df['LOCATION'].map(lambda x: flag_img(x) if x in country_flags 
 scatter_plot = dcc.Graph(
     id='scatter-plot',
     style={'height': '70vh'},
-    figure=create_histogram_with_percentiles(df, 'IRATING', 400)
+    figure=create_histogram_with_percentiles(df, 'IRATING', 100)  # 100 = ancho de cada bin
 )
 
 # Tabla con paginación del lado del servidor
@@ -220,7 +241,7 @@ def update_table(page_current, page_size, sort_by, country_filter):
     total_pages = len(filtered_df) // page_size + (1 if len(filtered_df) % page_size > 0 else 0)
     
     # Actualizar el histograma con la data filtrada
-    updated_figure = create_histogram_with_percentiles(filtered_df, 'IRATING', 400)
+    updated_figure = create_histogram_with_percentiles(filtered_df, 'IRATING', 100)
     
     return page_data, total_pages, updated_figure  # <-- Devuelve también el nuevo gráfico
 
