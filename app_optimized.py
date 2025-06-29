@@ -7,6 +7,79 @@ import plotly.graph_objects as go
 import pycountry_convert as pc
 import pycountry
 
+def create_density_heatmap(df):
+    # --- 1. Preparación de datos ---
+    num_bins_tendencia = 50 
+    df_copy = df.copy()
+    df_copy['irating_bin'] = pd.cut(df_copy['IRATING'], bins=num_bins_tendencia)
+    # MODIFICACIÓN: Añadimos 'mean' al cálculo de agregación
+    stats_per_bin = df_copy.groupby('irating_bin')['AVG_INC'].agg(['max', 'min', 'mean']).reset_index()
+    stats_per_bin['irating_mid'] = stats_per_bin['irating_bin'].apply(lambda b: b.mid)
+    stats_per_bin = stats_per_bin.sort_values('irating_mid').dropna()
+
+    # --- 2. CÁLCULO DE LA REGRESIÓN LINEAL ---
+    # Coeficientes para máximos y mínimos (sin cambios)
+    max_coeffs = np.polyfit(stats_per_bin['irating_mid'], stats_per_bin['max'], 1)
+    max_line_func = np.poly1d(max_coeffs)
+    min_coeffs = np.polyfit(stats_per_bin['irating_mid'], stats_per_bin['min'], 1)
+    min_line_func = np.poly1d(min_coeffs)
+    
+    # NUEVO: Coeficientes para la línea de promedios
+    mean_coeffs = np.polyfit(stats_per_bin['irating_mid'], stats_per_bin['mean'], 1)
+    mean_line_func = np.poly1d(mean_coeffs)
+
+    # Generamos los puntos Y para las líneas rectas
+    x_trend = stats_per_bin['irating_mid']
+    y_trend_max = max_line_func(x_trend)
+    y_trend_min = min_line_func(x_trend)
+    y_trend_mean = mean_line_func(x_trend) # NUEVO
+
+    # --- 3. Creación de las trazas del gráfico ---
+    heatmap_trace = go.Histogram2d(
+        x=df['IRATING'],
+        y=df['AVG_INC'],
+        colorscale='Plasma',
+        nbinsx=100, nbinsy=100, zmin=0, zmax=50,
+        name='Densidad'
+    )
+    
+    max_line_trace = go.Scatter(
+        x=x_trend, y=y_trend_max, mode='lines',
+        name='Tendencia Máximo AVG_INC',
+        line=dict(color='red', width=1, dash='dash')
+    )
+    
+    min_line_trace = go.Scatter(
+        x=x_trend, y=y_trend_min, mode='lines',
+        name='Tendencia Mínimo AVG_INC',
+        line=dict(color='lime', width=1, dash='dash')
+    )
+
+    # NUEVO: Traza para la línea de promedio
+    mean_line_trace = go.Scatter(
+        x=x_trend,
+        y=y_trend_mean,
+        mode='lines',
+        name='Tendencia Promedio AVG_INC',
+        line=dict(color='black', width=2, dash='solid')
+    )
+
+    # --- 4. Combinación de las trazas en una sola figura ---
+    # MODIFICACIÓN: Añadimos la nueva traza a la lista de datos
+    fig = go.Figure(data=[heatmap_trace, max_line_trace, min_line_trace, mean_line_trace])
+    
+    fig.update_layout(
+        title='Densidad de Pilotos: iRating vs. AVG_INC',
+        xaxis_title='iRating',
+        yaxis_title='Incidents Per Race',
+        template='plotly_dark',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(range=[0, 12000], showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
+        yaxis=dict(range=[0,25], showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
+        legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99)
+    )
+    return fig
 
 
 def country_to_continent_code(country_code):
@@ -80,8 +153,14 @@ def create_continent_map(df, selected_country='ALL'):
         locationmode="ISO-3",
         color="PILOTOS",
         hover_name="LOCATION_2_LETTER",
-        color_continuous_scale=px.colors.sequential.Plasma,
-        projection="natural earth" # Usamos una proyección que permite zoom
+        color_continuous_scale=[
+            [0.0, "#EBE8E8"],   # Empieza con un azul claro (LightSkyBlue)
+            [0.01, "#BAC5DB"],
+            [0.3, "#60D351"],   # Pasa por un cian muy pálido (LightCyan)
+            [1.0, "rgba(0,111,255,1)"]     # Azul oscuro para el valor máximo
+        ],
+        projection="natural earth",
+        range_color=[0, 10000]
     )
     
     # --- LÓGICA DE ZOOM DINÁMICO ---
@@ -148,19 +227,19 @@ def create_histogram_with_percentiles(df, column='IRATING', bin_width=100):
             [0.0, "#FFFFFF"],   # Empieza con un azul claro (LightSkyBlue)
             [0.1, "#A0B8EC"],
             [0.3, "#668CDF"],   # Pasa por un cian muy pálido (LightCyan)
-            [1.0, "#2C78DB"]    # Termina en blanco
+            [1.0, "rgba(0,111,255,1)"]    # Termina en blanco
         ])
     ))
     
     fig.update_layout(
-        title='Distribución de iRating (Valores pequeños amplificados)',
+        title='iRating Distribution',
         xaxis_title='iRating',
-        yaxis_title='Cantidad de Pilotos (escala ajustada)',
+        yaxis_title='Drivers',
         template='plotly_dark',
         hovermode='x unified',
         # --- AÑADE ESTAS LÍNEAS PARA CAMBIAR EL FONDO ---
-        paper_bgcolor='rgba(0,0,0,1)', # Fondo de toda la figura (transparente)
-        plot_bgcolor='rgba(0,0,0,1)',  # Fondo del área de las barras (transparente)
+        paper_bgcolor='rgba(30,30,38,1)', # Fondo de toda la figura (transparente)
+        plot_bgcolor='rgba(30,30,38,1)',  # Fondo del área de las barras (transparente)
         # --- FIN DE LAS LÍNEAS AÑADIDAS ---
         xaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
         yaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
@@ -191,6 +270,14 @@ def create_correlation_heatmap(df):
     )
     return fig
 
+def flag_img(code):
+    url = f"https://flagcdn.com/16x12/{code.lower()}.png"
+    if code in country_flags:
+        return f'![{code}]({url})'
+    else:
+        return f'`{code}`' 
+    
+
 country_flags = {
     'ES': '🇪🇸', 'US': '🇺🇸', 'BR': '🇧🇷', 'DE': '🇩🇪', 'FR': '🇫🇷', 'IT': '🇮🇹',
     'GB': '🇬🇧', 'PT': '🇵🇹', 'NL': '🇳🇱', 'AU': '🇦🇺', 'JP': '🇯🇵', 'CA': '🇨🇦',
@@ -198,6 +285,7 @@ country_flags = {
     'NO': '🇳🇴', 'DK': '🇩🇰', 'IE': '🇮🇪', 'CH': '🇨🇭', 'AT': '🇦🇹', 'PL': '🇵🇱',
     # ...agrega los que necesites...
 }
+
 country_coords = {
     'ES': {'lat': 40.4, 'lon': -3.7}, 'US': {'lat': 39.8, 'lon': -98.5},
     'BR': {'lat': -14.2, 'lon': -51.9}, 'DE': {'lat': 51.1, 'lon': 10.4},
@@ -213,31 +301,67 @@ country_coords = {
     'AT': {'lat': 47.5, 'lon': 14.5}, 'PL': {'lat': 51.9, 'lon': 19.1},
 }
 
+iracing_ragions = {
+    'US':['US'],
+    'Mexico':['MX'],
+    'Brazil':['BR'],
+    'Canada':['CA'],
+    'Atlantic':['GL'],
+    'Japan':['JP'],
+    'South America':['AR','PE','UY','CL','PY','BO','EC','CO','VE','GY','PA','CR','NI','HN','GT','BZ','SV','JM','DO','BS'],
+    'Iberia':['ES','PT'],
+    'International':['RU','IL'],
+    'France':['FR'],
+    'UK & I':['GB','IE'], # <-- CORREGIDO: ' IE' -> 'IE' y nombre
+    'Africa':['ZA','BW','ZW','ZM','CD','GA','BI','RW','UG','KE','SO','MG','SZ','NG','GH','CI','BF','NE','GW','GM','SN','MR','EH','MA','DZ','LY','TN','EG','DJ'],
+    'Italy':['IT'],
+    'Central-Eastern Europe':['PL','CZ','SK','HU','SI','HR','RS','ME','AL','RO','MD','UA','BY','EE','LV','LT'],
+    'Finland':['FI'],
+    'DE-AT-CH':['CH','AT','DE'], # <-- CORREGIDO: Eliminado el ''
+    'Scandinavia':['DK','SE','NO'],
+    'Australia & NZ':['AU','NZ'],
+    'Asia':['SA','JO','IQ','YE','OM','AE','QA','IN','PK','AF','NP','BD','MM','TH','KH','VN','MY','ID','CN','PH','KR','MN','KZ','KG','UZ','TJ','AF','TM','LK']
+}
+
 # --- 1. Carga y Preparación de Datos ---
 df = pd.read_csv('Sports_Car_driver_stats.csv')
 df = df[df['IRATING'] > 100]
-df = df[df['STARTS'] > 3]
+df = df[df['STARTS'] > 20]
+df = df[df['STARTS'] < 2000]
 df = df[df['CLASS'].str.contains('D|C|B|A|P', na=False)]
+print(len(df))
 
+# --- AÑADE ESTE BLOQUE PARA CREAR LA COLUMNA 'REGION' ---
+# 1. Invertir el diccionario iracing_ragions para un mapeo rápido
+country_to_region_map = {country: region 
+                         for region, countries in iracing_ragions.items() 
+                         for country in countries}
+
+# 2. Crear la nueva columna 'REGION' usando el mapa
+df['REGION'] = df['LOCATION'].map(country_to_region_map)
+
+# 3. Rellenar los países no encontrados con un valor por defecto
+df['REGION'].fillna('International', inplace=True)
+# --- FIN DEL BLOQUE AÑADIDO ---
 
 df['CONTINENT'] = df['LOCATION'].apply(country_to_continent_code)
 
 #df = df[df['IRATING'] < 10000]
 df_table = df[['DRIVER','IRATING','LOCATION','STARTS','WINS']]
 df_for_graphs = df.copy() # Usamos una copia completa para los gráficos
-df = df[['DRIVER','IRATING','LOCATION','STARTS','WINS','AVG_START_POS','AVG_FINISH_POS','AVG_INC','TOP25PCNT']]
 
-def flag_img(code):
-    url = f"https://flagcdn.com/16x12/{code.lower()}.png"
-    if code in country_flags:
-        return f'![{code}]({url})'
-    else:
-        return f'`{code}`' 
+# --- CORRECCIÓN AQUÍ: Añade 'REGION' a la lista de columnas ---
+df = df[['DRIVER','IRATING','LOCATION','STARTS','WINS','AVG_START_POS','AVG_FINISH_POS','AVG_INC','TOP25PCNT', 'REGION']]
 
 # Aplica solo el emoji/código si está en country_flags, si no deja el valor original
 df_table['LOCATION'] = df_table['LOCATION'].map(lambda x: flag_img(x) if x in country_flags else x)
 
 #df['LOCATION'] = 'a'
+density_heatmap = dcc.Graph(
+    id='density-heatmap',
+    style={'height': '30vh', 'borderRadius': '15px', 'overflow': 'hidden'},
+    figure=create_density_heatmap(df_for_graphs)
+)
 
 
 histogram_irating = dcc.Graph(
@@ -283,32 +407,37 @@ interactive_table = dash_table.DataTable(
         'backgroundColor': 'rgb(0, 0, 0)',
         'color': 'rgb(255, 255, 255,1)',
         'border': '1px solid rgba(255, 255, 255, 0)',
-        'minWidth': '100px',
-        'maxWidth': '200px',
         'overflow': 'hidden',
         'textOverflow': 'ellipsis',
     },
     style_header={
-        'backgroundColor': 'rgb(17, 17, 17)',
+        'backgroundColor': 'rgb(10, 10, 10)',
         'fontWeight': 'bold',
         'color': 'white',
         'border': 'none',
         'textAlign': 'center'
-    }
+    },
+    style_cell_conditional=[
+        {'if': {'column_id': 'DRIVER'},   'width': '40%'},
+        {'if': {'column_id': 'IRATING'},  'width': '15%'},
+        {'if': {'column_id': 'LOCATION'}, 'width': '15%'},
+        {'if': {'column_id': 'STARTS'},   'width': '15%'},
+        {'if': {'column_id': 'WINS'},     'width': '15%'},
+    ]
      # Renderizado virtual
 )
 
 scatter_irating_starts = dcc.Graph(
     id='scatter-irating',
-    style={'height': '30vh'},
+    style={'height': '30vh','borderRadius': '15px','overflow': 'hidden'},
     # Usamos go.Scattergl en lugar de px.scatter para un rendimiento masivo
     figure=go.Figure(data=go.Scattergl(
         x=df['IRATING'],
         y=df['STARTS'],
         mode='markers',
         marker=dict(
-            color='rgba(102, 197, 204, .3)', # Color semitransparente
-            size=2,
+            color='rgba(0,111,255,.3)', # Color semitransparente
+            size=5,
             line=dict(width=0)
         ),
         # Desactivamos el hover para máxima velocidad
@@ -317,7 +446,12 @@ scatter_irating_starts = dcc.Graph(
         title='Relación iRating vs. Carreras Iniciadas',
         xaxis_title='iRating',
         yaxis_title='Carreras Iniciadas (Starts)',
-        template='plotly_dark'
+        template='plotly_dark',
+        paper_bgcolor='rgba(30,30,38,1)', # Fondo de toda la figura (transparente)
+        plot_bgcolor='rgba(30,30,38,1)',  # Fondo del área de las barras (transparente)
+        # --- FIN DE LAS LÍNEAS AÑADIDAS ---
+        xaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
+        yaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
     ),
     # Hacemos el gráfico estático (no interactivo) para que sea aún más rápido
     config={'staticPlot': True}
@@ -343,16 +477,34 @@ app = dash.Dash(__name__)
 app.layout = html.Div(
     style={'height': '100vh', 'display': 'flex', 'flexDirection': 'column'},
     children=[
-        html.H1("Dashboard Interactivo - 300k Registros", style={'textAlign': 'center'}),
-        html.Div([
-            html.Label("Filtro rápido por país:"),
-            dcc.Dropdown(
-                id='country-filter',
-                options=[{'label': 'Todos', 'value': 'ALL'}] + 
-                       [{'label': country, 'value': country} for country in df['LOCATION'].dropna().unique()],
-                value='ALL',
-                style={'width': '200px', 'margin': '10px'}
-            )
+        
+        html.Div(style={'display': 'flex', 'alignItems': 'center'}, children=[ # Contenedor para título y filtros
+            html.H1("Top iRating", style={'textAlign': 'left','font-size':60,'margin-left':'2%','margin-right':'50px'}),
+            
+            # Filtro por Región
+            html.Div([
+                html.Label("Filtro por Región:"),
+                dcc.Dropdown(
+                    id='region-filter',
+                    options=[{'label': 'Todas', 'value': 'ALL'}] + 
+                           [{'label': region, 'value': region} for region in sorted(iracing_ragions.keys())],
+                    value='ALL',
+                    style={'width': '200px', 'margin': '10px'},
+                    className='iracing-dropdown'
+                )
+            ], style={'margin-right': '20px'}),
+
+            # Filtro por País
+            html.Div([
+                html.Label("Filtro por País:"),
+                dcc.Dropdown(
+                    id='country-filter',
+                    options=[{'label': 'Todos', 'value': 'ALL'}], # Se actualizará dinámicamente
+                    value='ALL',
+                    style={'width': '200px', 'margin': '10px'},
+                    className='iracing-dropdown'
+                )
+            ])
         ]),
         html.Div(
             style={'display': 'flex', 'flex': 1, 'minHeight': 0},
@@ -382,7 +534,8 @@ app.layout = html.Div(
                     },
                     children=[
                         histogram_irating,      # Gráfico de arriba
-                        scatter_irating_starts, # Gráfico del medio
+                        #scatter_irating_starts, # Gráfico del medio
+                        density_heatmap
                         #correlation_heatmap,     # Gráfico de abajo (NUEVO)
                     ]
                 ),
@@ -402,30 +555,62 @@ app.layout = html.Div(
     ]
 )
 # --- 4. Callbacks ---
+
+# NUEVO CALLBACK: Actualiza las opciones del filtro de país según la región seleccionada
+@app.callback(
+    Output('country-filter', 'options'),
+    Input('region-filter', 'value')
+)
+def update_country_options(selected_region):
+    if not selected_region or selected_region == 'ALL':
+        # Si no hay región o es 'ALL', muestra todos los países
+        countries = df['LOCATION'].dropna().unique()
+    else:
+        # Muestra solo los países de la región seleccionada
+        countries = iracing_ragions.get(selected_region, [])
+    
+    options = [{'label': 'Todos', 'value': 'ALL'}] + \
+              [{'label': country, 'value': country} for country in sorted(countries)]
+    return options
+
+# CALLBACK PRINCIPAL MODIFICADO
 @app.callback(
     Output('datatable-interactiva', 'data'),
     Output('datatable-interactiva', 'page_count'),
     Output('histogram-plot', 'figure'),
-    Output('continent-map', 'figure'),   # <-- AÑADE ESTA SALIDA
+    Output('continent-map', 'figure'),
     Input('datatable-interactiva', 'page_current'),
     Input('datatable-interactiva', 'page_size'),
     Input('datatable-interactiva', 'sort_by'),
+    Input('region-filter', 'value'), # <-- NUEVA ENTRADA
     Input('country-filter', 'value')
 )
-def update_table(page_current, page_size, sort_by, country_filter):
-    # --- CORRECCIÓN AQUÍ: Usa df_table en lugar de df ---
-    # df_table ya tiene las banderas en formato Markdown
+def update_table(page_current, page_size, sort_by, region_filter, country_filter): # <-- NUEVO PARÁMETRO
     filtered_df = df_table.copy()
     
-    # Para filtrar por país, necesitamos los códigos originales, no el Markdown.
-    # Así que usamos el 'df' original para la lógica de filtrado.
+    # Usamos el 'df' original para la lógica de filtrado
+    if not region_filter:
+        region_filter = 'ALL'
+    if not country_filter:
+        country_filter = 'ALL'
+
+    # --- LÓGICA DE FILTRADO COMBINADA ---
+    # 1. Filtrar por región primero
+    if region_filter != 'ALL':
+        indices_to_keep = df[df['REGION'] == region_filter].index
+    else:
+        indices_to_keep = df.index # Todos los índices si no hay filtro de región
+
+    # 2. Filtrar por país DESPUÉS, sobre el resultado de la región
     if country_filter != 'ALL':
-        # Obtenemos los índices de los pilotos del país filtrado desde el df original
-        indices_to_keep = df[df['LOCATION'] == country_filter].index
-        # Aplicamos ese filtro a nuestro df_table (que tiene las banderas)
-        filtered_df = df_table.loc[indices_to_keep]
+        # Intersectamos los índices de la región con los del país
+        country_indices = df[df['LOCATION'] == country_filter].index
+        indices_to_keep = indices_to_keep.intersection(country_indices)
+
+    # Aplicamos el filtro final a nuestro df_table (que tiene las banderas)
+    filtered_df = df_table.loc[indices_to_keep]
     
-    # Ordenar datos
+    # Ordenar datos (sin cambios)
     if sort_by:
         # Para ordenar, también necesitamos los valores reales, no el Markdown.
         # Creamos una copia temporal para ordenar y luego aplicamos el orden a filtered_df.
