@@ -9,10 +9,12 @@
   font-family: 'DashboardFont'; /* Dale un nombre para usarla en tu app */
   src: url('ADDCN___.ttf') format('truetype'); /* Apunta al archivo de tu fuente */
 }
-/* 2. Aplica la fuente a toda la aplicación */
+/* 2. Aplica la fuente a toda la aplicación 
 body {
-  font-family: 'DashboardFont', sans-serif; /* Usa tu fuente. 'sans-serif' es un respaldo */
+  font-family: 'DashboardFont', sans-serif; Usa tu fuente. 'sans-serif' es un respaldo 
 }
+
+
 
 /* Opcional: Asegúrate de que los títulos también la usen */
 h1, h2, h3, h4, h5, h6 {
