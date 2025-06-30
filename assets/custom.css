@@ -1,9 +1,12 @@
+
+
 /* assets/custom.css */
 .dash-table-container .dash-spreadsheet-container .dash-cell {
     height: calc(70vh / 21.5); /* 70vh dividido por el número de filas por página */
-    min-height: .5px;
+    min-height: 1px;
     max-height: 5px;
 }
+
 
 @font-face {
   font-family: 'DashboardFont'; /* Dale un nombre para usarla en tu app */
