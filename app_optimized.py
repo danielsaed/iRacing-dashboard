@@ -1,5 +1,5 @@
 import dash
-from dash import html, dcc, dash_table, Input, Output
+from dash import html, dcc, dash_table, Input, Output, State
 import plotly.express as px
 import pandas as pd
 import numpy as np
@@ -132,7 +132,7 @@ def country_to_continent_code(country_code):
     )
     return fig'''
 
-def create_continent_map(df, selected_country='ALL'):
+def create_continent_map(df, selected_region='ALL', selected_country='ALL'):
     # La preparación de datos es la misma
     country_counts = df['LOCATION'].value_counts().reset_index()
     country_counts.columns = ['LOCATION_2_LETTER', 'PILOTOS']
@@ -146,43 +146,71 @@ def create_continent_map(df, selected_country='ALL'):
     country_counts['LOCATION_3_LETTER'] = country_counts['LOCATION_2_LETTER'].apply(alpha2_to_alpha3)
     country_counts.dropna(subset=['LOCATION_3_LETTER'], inplace=True)
 
+    # Lógica de coloreado y hover avanzada (sin cambios)
+    show_scale = True 
+    if selected_region != 'ALL':
+        show_scale = False
+        countries_in_region = iracing_ragions.get(selected_region, [])
+        
+        def get_color_code(row):
+            if row['LOCATION_2_LETTER'] == selected_country: return 2
+            elif row['LOCATION_2_LETTER'] in countries_in_region: return 1
+            else: return 0
+
+        country_counts['COLOR'] = country_counts.apply(get_color_code, axis=1)
+        color_column = 'COLOR'
+        color_scale = [[0.0, 'rgba(50, 50, 50, 1)'], [0.5, 'rgba(0, 111, 255, 1)'], [1.0, 'rgba(0, 200, 80, 1)']]
+        range_color_val = [0, 2]
+    else:
+        color_column = 'PILOTOS'
+        color_scale = [[0.0, "#EBE8E8"], [0.01, "#BAC5DB"], [0.3, "#60D351"], [1.0, "rgba(0,111,255,1)"]]
+        range_color_val = [0, 10000]
+
     # Creación del mapa base
     fig = px.choropleth(
         country_counts,
         locations="LOCATION_3_LETTER",
         locationmode="ISO-3",
-        color="PILOTOS",
-        hover_name="LOCATION_2_LETTER",
-        color_continuous_scale=[
-            [0.0, "#EBE8E8"],   # Empieza con un azul claro (LightSkyBlue)
-            [0.01, "#BAC5DB"],
-            [0.3, "#60D351"],   # Pasa por un cian muy pálido (LightCyan)
-            [1.0, "rgba(0,111,255,1)"]     # Azul oscuro para el valor máximo
-        ],
+        color=color_column,
+        # --- CORRECCIÓN CLAVE AQUÍ ---
+        # Ya no usamos hover_name, pasamos todo a custom_data
+        custom_data=['LOCATION_2_LETTER', 'PILOTOS'],
+        color_continuous_scale=color_scale,
         projection="natural earth",
-        range_color=[0, 10000]
+        range_color=range_color_val
     )
     
-    # --- LÓGICA DE ZOOM DINÁMICO ---
+    # Actualizamos la plantilla del hover para usar las variables correctas de custom_data
+    fig.update_traces(
+        hovertemplate="<b>%{customdata[0]}</b><br>Pilotos: %{customdata[1]}<extra></extra>"
+    )
+    
+    # Lógica de zoom dinámico (sin cambios)
     if selected_country != 'ALL' and selected_country in country_coords:
-        # Si se selecciona un país válido, hacemos zoom en él
         zoom_level = 4 if selected_country not in ['US', 'CA', 'AU', 'BR', 'AR'] else 3
-        fig.update_geos(
-            center=country_coords[selected_country],
-            projection_scale=zoom_level
-        )
+        fig.update_geos(center=country_coords[selected_country], projection_scale=zoom_level)
+    elif selected_region != 'ALL':
+        countries_in_region = iracing_ragions.get(selected_region, [])
+        lats = [country_coords[c]['lat'] for c in countries_in_region if c in country_coords]
+        lons = [country_coords[c]['lon'] for c in countries_in_region if c in country_coords]
+        if lats and lons:
+            center_lat = sum(lats) / len(lats)
+            center_lon = sum(lons) / len(lons)
+            zoom_level = 2
+            if len(countries_in_region) < 5: zoom_level = 4
+            elif len(countries_in_region) < 15: zoom_level = 3
+            fig.update_geos(center={'lat': center_lat, 'lon': center_lon}, projection_scale=zoom_level)
+        else:
+            fig.update_geos(center={'lat': 20, 'lon': 0}, projection_scale=1)
     else:
-        # Si es 'ALL' o no está en el dict, vista mundial
-        fig.update_geos(
-            center={'lat': 20, 'lon': 0},
-            projection_scale=1
-        )
+        fig.update_geos(center={'lat': 20, 'lon': 0}, projection_scale=1)
 
     fig.update_layout(
         title_text='🌍 Pilotos por País',
         template='plotly_dark',
         geo=dict(bgcolor='rgba(0,0,0,0)', lakecolor='#4E5D6C', landcolor='#323232', subunitcolor='grey'),
-        margin={"r":0,"t":40,"l":0,"b":0}
+        margin={"r":0,"t":40,"l":0,"b":0},
+        coloraxis_showscale=show_scale
     )
     return fig
 
@@ -344,17 +372,32 @@ df['REGION'] = df['LOCATION'].map(country_to_region_map)
 df['REGION'].fillna('International', inplace=True)
 # --- FIN DEL BLOQUE AÑADIDO ---
 
+# --- AÑADE ESTE BLOQUE PARA CALCULAR LOS RANKINGS ---
+# --- CORRECCIÓN: Cambiamos method='dense' por method='first' para rankings únicos ---
+df['Rank World'] = df['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
+df['Rank Region'] = df.groupby('REGION')['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
+df['Rank Country'] = df.groupby('LOCATION')['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
+# --- FIN DEL BLOQUE AÑADIDO ---
+
 df['CONTINENT'] = df['LOCATION'].apply(country_to_continent_code)
 
+df['CLASS'] = df['CLASS'].str[0]
+
 #df = df[df['IRATING'] < 10000]
-df_table = df[['DRIVER','IRATING','LOCATION','STARTS','WINS']]
+
+# --- MODIFICACIÓN: Definimos las columnas que queremos en la tabla ---
+# Usaremos esta lista más adelante para construir el df_table dinámicamente
+TABLE_COLUMNS = ['DRIVER', 'IRATING', 'LOCATION', 'Rank World', 'Rank Region', 'Rank Country']
+df_table = df[TABLE_COLUMNS]
+
 df_for_graphs = df.copy() # Usamos una copia completa para los gráficos
 
-# --- CORRECCIÓN AQUÍ: Añade 'REGION' a la lista de columnas ---
-df = df[['DRIVER','IRATING','LOCATION','STARTS','WINS','AVG_START_POS','AVG_FINISH_POS','AVG_INC','TOP25PCNT', 'REGION']]
+# --- MODIFICACIÓN: Nos aseguramos de que el df principal tenga todas las columnas necesarias ---
+df = df[['DRIVER','IRATING','LOCATION','STARTS','WINS','AVG_START_POS','AVG_FINISH_POS','AVG_INC','TOP25PCNT', 'REGION', 'Rank World', 'Rank Region', 'Rank Country','CLASS']]
 
 # Aplica solo el emoji/código si está en country_flags, si no deja el valor original
-df_table['LOCATION'] = df_table['LOCATION'].map(lambda x: flag_img(x) if x in country_flags else x)
+# OJO: Esta línea ahora debe ir dentro del callback, ya que las columnas cambian
+# df_table['LOCATION'] = df_table['LOCATION'].map(lambda x: flag_img(x) if x in country_flags else x)
 
 #df['LOCATION'] = 'a'
 density_heatmap = dcc.Graph(
@@ -370,13 +413,11 @@ histogram_irating = dcc.Graph(
     figure=create_histogram_with_percentiles(df, 'IRATING', 100)  # 100 = ancho de cada bin
 )
 
-# Tabla con paginación del lado del servidor
+# --- MODIFICACIÓN: Simplificamos la definición inicial de la tabla ---
+# Las columnas se generarán dinámicamente en el callback
 interactive_table = dash_table.DataTable(
     id='datatable-interactiva',
-    columns=[
-        {"name": i, "id": i, "presentation": "markdown",'type': 'text'} if i == "LOCATION" else {"name": i, "id": i}
-        for i in df_table.columns
-    ],
+    # columns se define en el callback
     data=[],  # Inicialmente vacía
     sort_action="custom",
     sort_mode="single",
@@ -384,8 +425,13 @@ interactive_table = dash_table.DataTable(
     page_current=0,
     page_size=20,
     page_count=len(df_table) // 20 + (1 if len(df_table) % 20 > 0 else 0),
+    active_cell={'row': 0, 'column': 1, 'column_id': 'DRIVER'},
     virtualization=False,
-    style_as_list_view=True,
+    style_as_list_view=False,
+    
+    # --- ELIMINAMOS selected_rows Y AÑADIMOS active_cell ---
+    # selected_rows=[],  # <-- ELIMINAR ESTA LÍNEA
+    
     style_table={
         'overflowX': 'auto',
         'height': '70vh',
@@ -400,7 +446,6 @@ interactive_table = dash_table.DataTable(
             'textAlign': 'center',
             'fontWeight': 'bold',
             'fontSize': 12,},
-
     style_cell={
         'textAlign': 'center',
         'padding': '1px',
@@ -417,12 +462,44 @@ interactive_table = dash_table.DataTable(
         'border': 'none',
         'textAlign': 'center'
     },
+    # --- AÑADIMOS ESTILO PARA LA FILA SELECCIONADA Y LAS CLASES ---
+    style_data_conditional=[
+        {
+            'if': {'state': 'active'},
+            'backgroundColor': 'rgba(0, 111, 255, 0.3)',
+            'border': '1px solid rgb(0, 111, 255)'
+        },
+        # --- REGLAS MEJORADAS CON BORDES REDONDEADOS ---
+        {'if': {'filter_query': '{CLASS} contains "P"','column_id': 'CLASS'}, 
+         'backgroundColor': 'black', 'color': 'white', 'fontWeight': 'bold', 'border': '2px solid black', 'borderRadius': '10px'},
+        
+        {'if': {'filter_query': '{CLASS} contains "A"','column_id': 'CLASS'}, 
+         'backgroundColor': 'blue', 'color': 'white', 'fontWeight': 'bold', 'border': '2px solid black', 'borderRadius': '10px'},
+        
+        {'if': {'filter_query': '{CLASS} contains "B"','column_id': 'CLASS'}, 
+         'backgroundColor': 'green', 'color': 'white', 'fontWeight': 'bold', 'border': '2px solid black', 'borderRadius': '10px'},
+        
+        {'if': {'filter_query': '{CLASS} contains "C"','column_id': 'CLASS'}, 
+         'backgroundColor': 'yellow', 'color': 'black', 'fontWeight': 'bold', 'border': '2px solid black', 'borderRadius': '10px'},
+        
+        {'if': {'filter_query': '{CLASS} contains "D"','column_id': 'CLASS'}, 
+         'backgroundColor': 'orange', 'color': 'white', 'fontWeight': 'bold', 'border': '2px solid black', 'borderRadius': '10px'},
+        
+        {'if': {'filter_query': '{CLASS} contains "R"','column_id': 'CLASS'}, 
+         'backgroundColor': 'red', 'color': 'white', 'fontWeight': 'bold', 'border': '2px solid black', 'borderRadius': '10px'},
+    ],
     style_cell_conditional=[
-        {'if': {'column_id': 'DRIVER'},   'width': '40%'},
-        {'if': {'column_id': 'IRATING'},  'width': '15%'},
-        {'if': {'column_id': 'LOCATION'}, 'width': '15%'},
-        {'if': {'column_id': 'STARTS'},   'width': '15%'},
-        {'if': {'column_id': 'WINS'},     'width': '15%'},
+        # --- AÑADIR ESTA LÍNEA PARA EL ANCHO DE LA NUEVA COLUMNA ---
+        {'if': {'column_id': 'CLASS'}, 'width': '5%'},
+        {'if': {'column_id': 'Rank World'},   'width': '10%'},
+        {'if': {'column_id': 'Rank Region'},  'width': '10%'},
+        {'if': {'column_id': 'Rank Country'},      'width': '10%'},
+        {'if': {'column_id': 'DRIVER'},        'width': '25%','textAlign': 'left'},
+        {'if': {'column_id': 'IRATING'},       'width': '15%'},
+        {'if': {'column_id': 'LOCATION'},      'width': '10%'},
+        {'if': {'column_id': 'WINS'},      'width': '10%'},
+        {'if': {'column_id': 'STARTS'},      'width': '10%'},
+        {'if': {'column_id': 'REGION'},      'width': '20%'},
     ]
      # Renderizado virtual
 )
@@ -504,7 +581,24 @@ app.layout = html.Div(
                     style={'width': '200px', 'margin': '10px'},
                     className='iracing-dropdown'
                 )
-            ])
+            ], style={'margin-right': '20px'}),
+
+            # --- MODIFICACIÓN: Cambiamos Input+Button por un Dropdown de búsqueda ---
+            html.Div([
+                html.Label("Buscar Piloto:"),
+                dcc.Dropdown(
+                    id='pilot-search-dropdown',
+                    options=[],  # Las opciones se generan en el servidor
+                    placeholder='Search Dirver...',
+                    style={'width': '250px', 'margin': '10px'},
+                    className='iracing-dropdown',
+                    searchable=True,
+                    clearable=True,
+                    # --- PROPIEDAD CLAVE PARA BÚSQUEDA EN SERVIDOR ---
+                    search_value='', # Captura el texto de búsqueda
+                )
+            ], style={'margin-left': '20px'})
+            # --- FIN DEL BLOQUE MODIFICADO ---
         ]),
         html.Div(
             style={'display': 'flex', 'flex': 1, 'minHeight': 0},
@@ -512,7 +606,7 @@ app.layout = html.Div(
                 # Columna Izquierda (Tabla) - Ancho ajustado
                 html.Div(
                     style={
-                        'width': '20%',
+                        'width': '25%',
                         'height': '100%',
                         'padding': '10px',
                         'display': 'flex',
@@ -551,7 +645,21 @@ app.layout = html.Div(
                     ]
                 )
             ]
-        )
+        ),
+        # --- NUEVO: Componente para mostrar información del piloto seleccionado ---
+        html.Div(
+            id='pilot-info-display',
+            style={
+                'backgroundColor': 'rgb(10, 10, 10)',
+                'color': 'white',
+                'padding': '10px',
+                'borderRadius': '10px',
+                'margin': '10px',
+                'fontSize': '14px',
+                'display': 'none'  # Oculto por defecto
+            }
+        ),
+        dcc.Store(id='shared-data-store', data={})
     ]
 )
 # --- 4. Callbacks ---
@@ -573,77 +681,251 @@ def update_country_options(selected_region):
               [{'label': country, 'value': country} for country in sorted(countries)]
     return options
 
-# CALLBACK PRINCIPAL MODIFICADO
+@app.callback(
+    Output('pilot-search-dropdown', 'options'),
+    Input('pilot-search-dropdown', 'search_value'),
+    State('pilot-search-dropdown', 'value'),  # <-- AÑADIMOS ESTADO para saber el piloto ya seleccionado
+    State('region-filter', 'value'),
+    State('country-filter', 'value'),
+    prevent_initial_call=True,
+)
+def update_pilot_search_options(search_value, current_selected_pilot, region_filter, country_filter):
+    # Si no hay texto de búsqueda, pero ya hay un piloto seleccionado,
+    # nos aseguramos de que su opción esté disponible para que no desaparezca.
+    if not search_value:
+        if current_selected_pilot:
+            return [{'label': current_selected_pilot, 'value': current_selected_pilot}]
+        return []
+
+    # Mantenemos la optimización de no buscar con texto muy corto
+    if len(search_value) < 2:
+        return []
+
+    # 1. La lógica de filtrado no cambia
+    if not region_filter: region_filter = 'ALL'
+    if not country_filter: country_filter = 'ALL'
+
+    filtered_df = df
+    if region_filter != 'ALL':
+        filtered_df = filtered_df[filtered_df['REGION'] == region_filter]
+    if country_filter != 'ALL':
+        filtered_df = filtered_df[filtered_df['LOCATION'] == country_filter]
+
+    # 2. La búsqueda de coincidencias no cambia
+    matches = filtered_df[filtered_df['DRIVER'].str.contains(search_value, case=False)]
+    top_matches = matches.nlargest(20, 'IRATING')
+
+    # 3. Creamos las opciones a partir de las coincidencias
+    options = [{'label': row['DRIVER'], 'value': row['DRIVER']} 
+               for _, row in top_matches.iterrows()]
+
+    # 4. LA CLAVE: Si el piloto ya seleccionado no está en la nueva lista de opciones
+    # (porque borramos el texto, por ejemplo), lo añadimos para que no se borre de la vista.
+    if current_selected_pilot and not any(opt['value'] == current_selected_pilot for opt in options):
+        options.insert(0, {'label': current_selected_pilot, 'value': current_selected_pilot})
+    
+    print(f"DEBUG: Búsqueda de '{search_value}' encontró {len(options)} coincidencias.")
+    
+    return options
+
+# --- CALLBACK para limpiar la búsqueda si cambian los filtros ---
+@app.callback(
+    Output('pilot-search-dropdown', 'value'),
+    Input('region-filter', 'value'),
+    Input('country-filter', 'value'),
+)
+def clear_pilot_search_on_filter_change(region, country):
+    # Cuando un filtro principal cambia, reseteamos la selección del piloto
+    return None
+
+# --- CALLBACK CONSOLIDADO: BÚSQUEDA Y TABLA ---
 @app.callback(
     Output('datatable-interactiva', 'data'),
     Output('datatable-interactiva', 'page_count'),
+    Output('datatable-interactiva', 'columns'),
+    Output('datatable-interactiva', 'page_current'),
+    Output('shared-data-store', 'data'),  # CAMBIAR: active_cell por data
     Output('histogram-plot', 'figure'),
     Output('continent-map', 'figure'),
+    Input('region-filter', 'value'),
+    Input('country-filter', 'value'),
+    Input('pilot-search-dropdown', 'value'),
     Input('datatable-interactiva', 'page_current'),
     Input('datatable-interactiva', 'page_size'),
-    Input('datatable-interactiva', 'sort_by'),
-    Input('region-filter', 'value'), # <-- NUEVA ENTRADA
-    Input('country-filter', 'value')
+    Input('datatable-interactiva', 'sort_by')
 )
-def update_table(page_current, page_size, sort_by, region_filter, country_filter): # <-- NUEVO PARÁMETRO
-    filtered_df = df_table.copy()
+def update_table_and_search(region_filter, country_filter, selected_pilot,
+                           page_current, page_size, sort_by):
     
-    # Usamos el 'df' original para la lógica de filtrado
-    if not region_filter:
-        region_filter = 'ALL'
-    if not country_filter:
-        country_filter = 'ALL'
-
-    # --- LÓGICA DE FILTRADO COMBINADA ---
-    # 1. Filtrar por región primero
-    if region_filter != 'ALL':
-        indices_to_keep = df[df['REGION'] == region_filter].index
+    # Detectar qué input activó el callback
+    ctx = dash.callback_context
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
+    
+    # --- LÓGICA PARA DETERMINAR LAS COLUMNAS A MOSTRAR ---
+    # --- AÑADIR 'CLASS' A LA LISTA DE COLUMNAS BASE ---
+    base_cols = ['DRIVER', 'IRATING', 'LOCATION', 'REGION', 'STARTS', 'WINS','CLASS']
+    
+    if country_filter and country_filter != 'ALL':
+        dynamic_cols = ['Rank Country'] + base_cols
+    elif region_filter and region_filter != 'ALL':
+        dynamic_cols = ['Rank Region'] + base_cols
     else:
-        indices_to_keep = df.index # Todos los índices si no hay filtro de región
+        dynamic_cols = ['Rank World'] + base_cols
 
-    # 2. Filtrar por país DESPUÉS, sobre el resultado de la región
+    # Crear dataframe filtrado
+    filtered_df = df[dynamic_cols].copy()
+    filtered_df['LOCATION'] = filtered_df['LOCATION'].map(lambda x: flag_img(x) if x in country_flags else x)
+
+    # --- FILTRADO POR REGIÓN Y PAÍS ---
+    if not region_filter: region_filter = 'ALL'
+    if not country_filter: country_filter = 'ALL'
+
+    indices_to_keep = df.index
+    if region_filter != 'ALL':
+        indices_to_keep = indices_to_keep.intersection(df[df['REGION'] == region_filter].index)
     if country_filter != 'ALL':
-        # Intersectamos los índices de la región con los del país
-        country_indices = df[df['LOCATION'] == country_filter].index
-        indices_to_keep = indices_to_keep.intersection(country_indices)
+        indices_to_keep = indices_to_keep.intersection(df[df['LOCATION'] == country_filter].index)
 
-    # Aplicamos el filtro final a nuestro df_table (que tiene las banderas)
-    filtered_df = df_table.loc[indices_to_keep]
+    filtered_df = filtered_df.loc[indices_to_keep]
     
-    # Ordenar datos (sin cambios)
+    # --- ORDENAMIENTO ---
     if sort_by:
-        # Para ordenar, también necesitamos los valores reales, no el Markdown.
-        # Creamos una copia temporal para ordenar y luego aplicamos el orden a filtered_df.
-        sorting_df = df.loc[filtered_df.index] # Usamos el df original con los mismos índices
+        sorting_df = df.loc[filtered_df.index]
         sorting_df = sorting_df.sort_values(
             by=sort_by[0]['column_id'],
             ascending=sort_by[0]['direction'] == 'asc'
         )
-        # Reordenamos filtered_df para que coincida con el orden de sorting_df
         filtered_df = filtered_df.loc[sorting_df.index]
 
-    # Calcular paginación
-    start_idx = page_current * page_size
+    # --- LÓGICA DE BÚSQUEDA Y NAVEGACIÓN ---
+    target_page = page_current
+    try:
+        active_cell = active_cell
+    except:
+        active_cell = None
+    
+    # Solo ejecutar búsqueda si hay piloto seleccionado
+    if selected_pilot:
+        match = filtered_df[filtered_df['DRIVER'] == selected_pilot]
+        if not match.empty:
+            pilot_index = filtered_df.index.get_loc(match.index[0])
+            target_page = pilot_index // page_size
+            target_row_on_page = pilot_index % page_size
+            
+            driver_column_index = list(filtered_df.columns).index('DRIVER')
+            
+            active_cell = {
+                'row': target_row_on_page,
+                'column': driver_column_index,
+                'column_id': 'DRIVER'
+            }
+            print(f"DEBUG: Piloto '{selected_pilot}' encontrado en página {target_page}, fila {target_row_on_page}, columna {driver_column_index}")
+
+    # --- ESTABLECER active_cell POR DEFECTO SI NO HAY BÚSQUEDA ---
+    if not active_cell:
+        driver_column_index = list(filtered_df.columns).index('DRIVER')
+        active_cell = {
+            'row': 21,
+            'column': driver_column_index,
+            'column_id': 'DRIVER'
+        }
+        print(f"DEBUG: Estableciendo active_cell por defecto en fila 0")
+
+    # --- GUARDAR active_cell EN EL STORE ---
+    shared_data = {
+        'active_cell': active_cell,
+        'selected_pilot': selected_pilot or '',
+        'timestamp': str(pd.Timestamp.now())
+    }
+    
+    print(f"DEBUG: Guardando en store: {shared_data}")
+
+    # --- GENERACIÓN DE COLUMNAS ---
+    columns_definition = []
+    for col_name in filtered_df.columns:
+        if col_name == "LOCATION":
+            columns_definition.append({"name": "Country", "id": col_name, "presentation": "markdown", 'type': 'text'})
+        elif col_name == "IRATING":
+            columns_definition.append({"name": "iRating", "id": col_name})
+        elif col_name.startswith("Rank "):
+            columns_definition.append({"name": col_name.replace("Rank ", ""), "id": col_name})
+        elif col_name == "CLASS":
+            columns_definition.append({"name": "SR", "id": col_name})
+        else:
+            columns_definition.append({"name": col_name.title(), "id": col_name})
+
+    # --- PAGINACIÓN ---
+    start_idx = target_page * page_size
     end_idx = start_idx + page_size
-    
-    # Obtener datos de la página current
     page_data = filtered_df.iloc[start_idx:end_idx].to_dict('records')
-    
-    # Calcular número total de páginas
     total_pages = len(filtered_df) // page_size + (1 if len(filtered_df) % page_size > 0 else 0)
     
-    # --- Lógica de actualización de gráficos ---
+
+    # --- GRÁFICOS ---
     graph_indices = filtered_df.index
-    
-    # Actualizar el histograma
     updated_histogram_figure = create_histogram_with_percentiles(df.loc[graph_indices], 'IRATING', 100)
+    updated_map_figure = create_continent_map(df_for_graphs, region_filter, country_filter)
     
-    # --- ACTUALIZAR EL MAPA ---
-    # Pasamos el dataframe de gráficos y el país seleccionado
-    updated_map_figure = create_continent_map(df_for_graphs, country_filter)
+    return (page_data, total_pages, columns_definition, target_page, 
+            shared_data, updated_histogram_figure, updated_map_figure)
+
+# --- NUEVO CALLBACK: IMPRIMIR DATOS DEL PILOTO SELECCIONADO ---
+@app.callback(
+    Output('pilot-info-display', 'children'),  # Necesitarás añadir este componente al layout
+    Input('datatable-interactiva', 'active_cell'),
+    State('datatable-interactiva', 'data'),
+    State('region-filter', 'value'),
+    State('country-filter', 'value'),
+    prevent_initial_call=True
+)
+def print_selected_pilot_data(active_cell, table_data, region_filter, country_filter):
+    if not active_cell or not table_data:
+        return "No hay piloto seleccionado"
     
-    # Devuelve los 4 valores
-    return page_data, total_pages, updated_histogram_figure, updated_map_figure
+    # Obtener el nombre del piloto de la fila seleccionada
+    selected_row = active_cell['row']
+    if selected_row >= len(table_data):
+        return "Fila no válida"
+    
+    pilot_name = table_data[selected_row]['DRIVER']
+    
+    # Buscar todos los datos del piloto en el DataFrame original
+    pilot_data = df[df['DRIVER'] == pilot_name]
+    
+    if pilot_data.empty:
+        return f"No se encontraron datos para {pilot_name}"
+    
+    # Obtener la primera (y única) fila del piloto
+    pilot_info = pilot_data.iloc[0]
+    
+    # IMPRIMIR EN CONSOLA todos los datos del piloto
+    print("\n" + "="*50)
+    print(f"DATOS DEL PILOTO SELECCIONADO: {pilot_name}")
+    print("="*50)
+    for column, value in pilot_info.items():
+        print(f"{column}: {value}")
+    print("="*50 + "\n")
+    
+    # También retornar información para mostrar en la interfaz (opcional)
+    return f"Piloto seleccionado: {pilot_name} (Ver consola para datos completos)"
+
+
+@app.callback(
+    Output('datatable-interactiva', 'active_cell'),
+    Input('shared-data-store', 'data'),
+    prevent_initial_call=True
+)
+def update_active_cell_from_store(shared_data):
+    if not shared_data:
+        return None
+    
+    active_cell = shared_data.get('active_cell')
+    selected_pilot = shared_data.get('selected_pilot', '')
+    
+    print(f"DEBUG: Recuperando active_cell del store: {active_cell}")
+    print(f"DEBUG: Piloto asociado: {selected_pilot}")
+    
+    return active_cell
 
 if __name__ == "__main__":
     app.run(debug=True)
