@@ -1,5 +1,5 @@
 body {
-  margin: 10px;
+  margin: 5px;
   padding: 0;
   background-color: rgba(18,18,26,255);
   color: #ffffff;
@@ -9,3 +9,84 @@ p {
    margin-bottom: 0;
    text-align : center;
 }
+
+#main-content-container {
+    flex-direction: row; /* Las columnas están una al lado de la otra */
+}
+
+#left-column, #middle-column, #right-column {
+    height: 100%; /* Ocupan toda la altura disponible */
+}
+
+
+/* Media Query para pantallas medianas y pequeñas (1200px o menos) */
+@media (max-width: 800px) {
+    /* Cambiamos la dirección del contenedor principal a vertical */
+    #main-content-container {
+        flex-direction: column; /* Las columnas se apilan una encima de la otra */
+        overflow-y: auto; /* Añadimos scroll vertical para toda la página */
+    }
+
+    /* Hacemos que cada columna ocupe todo el ancho disponible */
+    #left-column, #middle-column, #right-column {
+        width: 98% !important; /* Usamos !important para sobreescribir el estilo en línea de Python */
+        height: auto !important; /* La altura se ajusta al contenido */
+        min-height: 60vh; /* Damos una altura mínima para que los gráficos se vean bien */
+        margin: 1%;
+    }
+
+    /* Ajustamos la altura de la tabla para que no sea excesiva en vista móvil/vertical */
+    #datatable-interactiva .dash-spreadsheet-container {
+        height: 60vh !important; 
+    }
+}
+
+/* --- ESTILOS PARA LA TABLA INTERACTIVA --- */
+
+/* Seleccionamos las celdas de datos de la tabla */
+#datatable-interactiva .dash-cell {
+    /* 
+     * TIPOGRAFÍA FLUIDA (LA CLAVE DE LA SOLUCIÓN)
+     * clamp(MIN, IDEAL, MAX)
+     * - MIN (8px): El tamaño de fuente NUNCA será menor de 8px.
+     * - IDEAL (0.6vw): El tamaño ideal será el 0.6% del ANCHO de la ventana.
+     *   Esto hace que la fuente se encoja al reducir la ventana.
+     * - MAX (12px): El tamaño de fuente NUNCA será mayor de 12px.
+    */
+    font-size: clamp(8px, 0.6vw, 12px) !important;
+    
+    /* Ajustamos el padding para que las celdas no se sientan apretadas */
+    padding: 1px 1px !important;
+}
+
+/* Hacemos lo mismo para la cabecera de la tabla */
+#datatable-interactiva .dash-header {
+    font-size: clamp(9px, 0.7vw, 13px) !important;
+    padding: 4px 2px !important;
+}
+
+/* --- ESTILOS PARA LOS DROPDOWNS Y LABELS (OPCIONAL PERO RECOMENDADO) --- */
+
+/* Hacemos que los filtros también sean un poco responsivos */
+.iracing-dropdown, .iracing-dropdown .Select-value-label, .iracing-dropdown .Select-placeholder {
+    font-size: clamp(10px, 0.8vw, 14px) !important;
+}
+
+label {
+    font-size: clamp(11px, 0.8vw, 15px) !important;
+}
+
+/* --- REGLA ESPECÍFICA PARA LA COLUMNA REGION --- */
+/* Seleccionamos solo las celdas que pertenecen a la columna 'REGION' */
+#datatable-interactiva .dash-cell[data-dash-column="REGION"] {
+    font-size: 10px !important; /* ¡Aquí sí funcionará! */
+}
+
+#datatable-interactiva .dash-cell[data-dash-column="DRIVER"] {
+    font-size: 12px !important; /* ¡Aquí sí funcionará! */
+}
+
+#datatable-interactiva .dash-cell[data-dash-column="CLASS"] {
+    font-size: 14px !important; /* ¡Aquí sí funcionará! */
+}
+
