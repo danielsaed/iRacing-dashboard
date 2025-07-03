@@ -90,3 +90,37 @@ label {
     font-size: 14px !important; /* ¡Aquí sí funcionará! */
 }
 
+/* --- ESTILOS PARA LOS BOTONES DEL TIPO DE TABLERO --- */
+.dashboard-type-button {
+    background-color: #323232;
+    color: white;
+    border: 1px solid #4A4A4A;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    /* --- AJUSTES PARA TAMAÑO Y TRANSICIÓN --- */
+    width: 120px; /* Ancho fijo para todos los botones */
+    text-align: center;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.dashboard-type-button:hover {
+    background-color: #4A4A4A;
+}
+
+/* Estilo para los dropdowns de filtros cuando están activos */
+.iracing-dropdown.active-filter .Select-control {
+    background-color: rgba(0, 111, 255, 0.25) !important;
+    border: 1px solid rgba(0, 111, 255, 0.7) !important;
+}
+
+/* Opcional: Cambia el color del texto y la flecha para que se vea mejor */
+.iracing-dropdown.active-filter .Select-placeholder,
+.iracing-dropdown.active-filter .Select-value-label {
+    color: #FFFFFF;
+}
+
+.iracing-dropdown.active-filter .Select-arrow {
+    border-top-color: #FFFFFF;
+}
