@@ -801,6 +801,8 @@ interactive_table = dash_table.DataTable(
     page_count=len(df_table) // 20 + (1 if len(df_table) % 20 > 0 else 0),
     virtualization=False,
     style_as_list_view=False,
+    active_cell={'row': 0,'column':1},
+    
     
     # --- ELIMINAMOS selected_rows Y AÑADIMOS active_cell ---
     # selected_rows=[],  # <-- ELIMINAR ESTA LÍNEA
@@ -958,126 +960,113 @@ app = dash.Dash(__name__)
 
 # Layout principal
 app.layout = html.Div(
-    style={'height': '100vh', 'display': 'flex', 'flexDirection': 'column'},
+    style={'height': '100vh', 'display': 'flex', 'flexDirection': 'column', 'backgroundColor': '#1E1E1E'},
     children=[
         
-        html.Div(style={'display': 'flex', 'alignItems': 'center'}, children=[ # Contenedor para título y filtros
-            html.H1("Top iRating", style={'textAlign': 'left','font-size':60,'margin-left':'2%','margin-right':'50px'}),
-            
-            # Filtro por Región
-            html.Div([
-                html.Label("Filtro por Región:"),
-                dcc.Dropdown(
-                    id='region-filter',
-                    options=[{'label': 'Todas', 'value': 'ALL'}] + 
-                           [{'label': region, 'value': region} for region in sorted(iracing_ragions.keys())],
-                    value='ALL',
-                    style={'width': '200px', 'margin': '10px'},
-                    className='iracing-dropdown'
-                )
-            ], style={'margin-right': '20px'}),
-
-            # Filtro por País
-            html.Div([
-                html.Label("Filtro por País:"),
-                dcc.Dropdown(
-                    id='country-filter',
-                    options=[{'label': 'Todos', 'value': 'ALL'}], # Se actualizará dinámicamente
-                    value='ALL',
-                    style={'width': '200px', 'margin': '10px'},
-                    className='iracing-dropdown'
-                )
-            ], style={'margin-right': '20px'}),
-
-            # --- MODIFICACIÓN: Cambiamos Input+Button por un Dropdown de búsqueda ---
-            html.Div([
-                html.Label("Buscar Piloto:"),
-                dcc.Dropdown(
-                    id='pilot-search-dropdown',
-                    options=[],  # Las opciones se generan en el servidor
-                    placeholder='Search Dirver...',
-                    style={'width': '250px', 'margin': '10px'},
-                    className='iracing-dropdown',
-                    searchable=True,
-                    clearable=True,
-                    # --- PROPIEDAD CLAVE PARA BÚSQUEDA EN SERVIDOR ---
-                    search_value='', # Captura el texto de búsqueda
-                )
-            ], style={'margin-left': '20px'})
-            # --- FIN DEL BLOQUE MODIFICADO ---
-        ]),
+        # --- BARRA SUPERIOR: TÍTULO Y BOTONES DE TIPO DE DASHBOARD ---
         html.Div(
-            id='main-content-container', # <-- AÑADIMOS ESTE ID
-            style={'display': 'flex', 'flex': 1, 'minHeight': 0},
+            style={'padding': '10px 20px', 'textAlign': 'center'},
             children=[
-                # Columna Izquierda (Tabla)
+                html.H1("Top iRating", style={'fontSize': 48, 'color': 'white', 'margin': '0 0 10px 0'}),
+                html.Div([
+                    html.Button('Road', id='btn-road', n_clicks=0, className='dashboard-type-button'),
+                    html.Button('Oval', id='btn-oval', n_clicks=0, className='dashboard-type-button'),
+                    html.Button('Dirt Road', id='btn-dirt-road', n_clicks=0, className='dashboard-type-button'),
+                    html.Button('Dirt Oval', id='btn-dirt-oval', n_clicks=0, className='dashboard-type-button'),
+                ], style={'display': 'flex', 'justifyContent': 'center', 'gap': '10px'})
+            ]
+        ),
+        
+        # --- CONTENEDOR PRINCIPAL CON 3 COLUMNAS ---
+        html.Div(
+            id='main-content-container',
+            style={'display': 'flex', 'flex': 1, 'minHeight': 0, 'padding': '0 10px 10px 10px'},
+            children=[
+                
+                # --- COLUMNA IZQUIERDA (FILTROS Y TABLA) ---
                 html.Div(
-                    id='left-column', # <-- AÑADIMOS ESTE ID
-                    style={
-                        'width': '31%',
-                        'height': '100%',
-                        'padding': '1%',
-                        'display': 'flex',
-                        'flexDirection': 'column',
-                        'borderRadius': '15px'
-                    },
+                    id='left-column',
+                    style={'width': '35%', 'padding': '10px', 'display': 'flex', 'flexDirection': 'column'},
                     children=[
-                        html.Div(interactive_table, style={'flex': 1,'borderRadius': '15px'})
+                        # Contenedor de Filtros
+                        html.Div(
+                            style={'display': 'flex', 'justifyContent': 'space-between', 'marginBottom': '10px'},
+                            children=[
+                                html.Div([
+                                    html.Label("Filtro por Región:", style={'color': 'white', 'fontSize': 12}),
+                                    dcc.Dropdown(
+                                        id='region-filter',
+                                        options=[{'label': 'Todas', 'value': 'ALL'}] + 
+                                               [{'label': region, 'value': region} for region in sorted(iracing_ragions.keys())],
+                                        value='ALL',
+                                        className='iracing-dropdown',
+                                        # --- AÑADIMOS ESTILO INICIAL ---
+                                        style={'width': '100%'}
+                                    )
+                                ], style={'flex': 1, 'marginRight': '10px'}),
+
+                                html.Div([
+                                    html.Label("Filtro por País:", style={'color': 'white', 'fontSize': 12}),
+                                    dcc.Dropdown(
+                                        id='country-filter',
+                                        options=[{'label': 'Todos', 'value': 'ALL'}],
+                                        value='ALL',
+                                        className='iracing-dropdown',
+                                        # --- AÑADIMOS ESTILO INICIAL ---
+                                        style={'width': '100%'}
+                                    )
+                                ], style={'flex': 1, 'marginRight': '10px'}),
+
+                                html.Div([
+                                    html.Label("Buscar Piloto:", style={'color': 'white', 'fontSize': 12}),
+                                    dcc.Dropdown(
+                                        id='pilot-search-dropdown',
+                                        options=[],
+                                        placeholder='Buscar Piloto...',
+                                        className='iracing-dropdown',
+                                        searchable=True,
+                                        clearable=True,
+                                        search_value='',
+                                    )
+                                ], style={'flex': 1})
+                            ]
+                        ),
+                        # Contenedor de la Tabla
+                        html.Div(interactive_table, style={'flex': 1})
                     ]
                 ),
-                # Columna Central (Gráficos)
+                
+                # --- COLUMNA CENTRAL ---
                 html.Div(
                     id='middle-column',
-                    style={
-                        'width': '30%', 
-                        'padding': '10px',
-                        'display': 'flex',
-                        'flexDirection': 'column',
-                        'borderRadius': '15px'
-                    },
+                    style={'width': '25%', 'padding': '10px', 'display': 'flex', 'flexDirection': 'column'},
                     children=[
                         kpi_pilot,
-                        histogram_irating,
-                        competitiveness_table, # <-- AÑADIMOS LA NUEVA TABLA AQUÍ
-                        density_heatmap
+                        competitiveness_table,
+                        histogram_irating
                     ]
                 ),
-                # Columna Derecha (Mapa)
+                
+                # --- COLUMNA DERECHA ---
                 html.Div(
-                    id='right-column', # <-- AÑADIMOS ESTE ID
-                    style={
-                        'width': '40%', 
-                        'padding': '1%',
-                        'display': 'flex',
-                        'flexDirection': 'column'
-                    },
+                    id='right-column',
+                    style={'width': '40%', 'padding': '10px', 'display': 'flex', 'flexDirection': 'column'},
                     children=[
                         kpi_global,
-                        html.Div(continent_map, style={'flex': '1.2'}),
-                        region_bubble_chart  # <-- Añade aquí
+                        html.Div(continent_map, style={'flex': 1, 'minHeight': 0}),
+                        region_bubble_chart
                     ]
                 )
             ]
         ),
-        # --- NUEVO: Componente para mostrar información del piloto seleccionado ---
-        html.Div(
-            id='pilot-info-display',
-            style={
-                'backgroundColor': 'rgb(10, 10, 10)',
-                'color': 'white',
-                'padding': '10px',
-                'borderRadius': '10px',
-                'margin': '10px',
-                'fontSize': '14px',
-                'display': 'none'  # Oculto por defecto
-            }
-        ),
+        
+        # Componentes ocultos
         dcc.Store(id='shared-data-store', data={}),
-        dcc.Store(id='shared-data-store_1', data={})
-
-            
+        dcc.Store(id='shared-data-store_1', data={}),
+        html.Div(id='pilot-info-display', style={'display': 'none'})
     ]
 )
+
 # --- 4. Callbacks ---
 
 # NUEVO CALLBACK: Actualiza las opciones del filtro de país según la región seleccionada
@@ -1172,6 +1161,71 @@ def update_pilot_search_options(search_value, current_selected_pilot, region_fil
 def clear_pilot_search_on_filter_change(region, country):
     # Cuando un filtro principal cambia, reseteamos la selección del piloto
     return None
+
+
+# --- CALLBACK PARA ESTILO DE FILTROS ACTIVOS (MODIFICADO) ---
+@app.callback(
+    Output('region-filter', 'className'),
+    Output('country-filter', 'className'),
+    Output('pilot-search-dropdown', 'className'), # <-- AÑADIMOS LA SALIDA
+    Input('region-filter', 'value'),
+    Input('country-filter', 'value'),
+    Input('pilot-search-dropdown', 'value') # <-- AÑADIMOS LA ENTRADA
+)
+def update_filter_styles(region_value, country_value, pilot_value):
+    # Clases base para los dropdowns
+    default_class = 'iracing-dropdown'
+    active_class = 'iracing-dropdown active-filter'
+
+    # Asignar clases según el valor de cada filtro
+    region_class = active_class if region_value and region_value != 'ALL' else default_class
+    country_class = active_class if country_value and country_value != 'ALL' else default_class
+    # NUEVA LÓGICA: El filtro de piloto está activo si tiene un valor
+    pilot_class = active_class if pilot_value else default_class
+
+    return region_class, country_class, pilot_class
+
+
+# --- CALLBACK PARA ESTILO DE BOTONES ACTIVOS ---
+@app.callback(
+    Output('btn-road', 'style'),
+    Output('btn-oval', 'style'),
+    Output('btn-dirt-road', 'style'),
+    Output('btn-dirt-oval', 'style'),
+    Input('btn-road', 'n_clicks'),
+    Input('btn-oval', 'n_clicks'),
+    Input('btn-dirt-road', 'n_clicks'),
+    Input('btn-dirt-oval', 'n_clicks')
+)
+def update_button_styles(road_clicks, oval_clicks, dirt_road_clicks, dirt_oval_clicks):
+    # Estilos base para los botones
+    base_style = {'width': '120px'} # Asegura que todos tengan el mismo ancho
+    active_style = {
+        'backgroundColor': 'rgba(0, 111, 255, 0.3)',
+        'border': '1px solid rgb(0, 111, 255)',
+        'width': '120px'
+    }
+
+    # Determinar qué botón fue presionado
+    ctx = dash.callback_context
+    if not ctx.triggered_id:
+        # Estado inicial: 'Road' activo por defecto
+        return active_style, base_style, base_style, base_style
+
+    button_id = ctx.triggered_id
+
+    # Devolver el estilo activo para el botón presionado y el base para los demás
+    if button_id == 'btn-road':
+        return active_style, base_style, base_style, base_style
+    elif button_id == 'btn-oval':
+        return base_style, active_style, base_style, base_style
+    elif button_id == 'btn-dirt-road':
+        return base_style, base_style, active_style, base_style
+    elif button_id == 'btn-dirt-oval':
+        return base_style, base_style, base_style, active_style
+    
+    # Fallback por si acaso
+    return base_style, base_style, base_style, base_style
 
 
 # --- CALLBACK CONSOLIDADO: BÚSQUEDA Y TABLA ---
@@ -1432,10 +1486,11 @@ def update_active_cell_from_store(active_cell,ds,ds1,a,b):
     print(f"DEBUG: Piloto asociado: {selected_pilot}")
     shared_data['shared_data'] = ''
     
+    
     return active_cell'''
 
 
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+       app.run(debug=True)
