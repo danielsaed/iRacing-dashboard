@@ -1,3 +1,14 @@
+#What is what i want to see on the dashboard
+
+#better what is what i want to know with this data
+
+#1 where % in the top world, region or country i am
+#2 who are the top iracers on world, region , country
+# comparations of countrys (players, level)
+#comparations of regions (player levels)
+#Top 20 of 
+
+
 import dash
 from dash import html, dcc, dash_table, Input, Output, State
 import plotly.express as px
@@ -6,6 +17,246 @@ import numpy as np
 import plotly.graph_objects as go
 import pycountry_convert as pc
 import pycountry
+
+
+def calculate_competitiveness(df):
+    """
+    Calcula el iRating promedio de los 100 mejores pilotos para cada región y país.
+    Descarta grupos con menos de 100 pilotos.
+    """
+    # --- Cálculo para Regiones ---
+    # Filtramos regiones con al menos 100 pilotos
+    region_counts = df['REGION'].value_counts()
+    valid_regions = region_counts[region_counts >= 100].index
+    
+    region_scores = {}
+    for region in valid_regions:
+        # Tomamos el top 100 por iRating y calculamos el promedio
+        top_100 = df[df['REGION'] == region].nlargest(100, 'IRATING')
+        region_scores[region] = top_100['IRATING'].mean()
+
+    # Convertimos a DataFrame, ordenamos y tomamos el top 10
+    top_regions_df = pd.DataFrame(list(region_scores.items()), columns=['REGION', 'avg_irating'])
+    top_regions_df = top_regions_df.sort_values('avg_irating', ascending=False).head(10)
+
+    # --- Cálculo para Países ---
+    # Mismo proceso para países
+    country_counts = df['LOCATION'].value_counts()
+    valid_countries = country_counts[country_counts >= 100].index
+    
+    country_scores = {}
+    for country in valid_countries:
+        top_100 = df[df['LOCATION'] == country].nlargest(100, 'IRATING')
+        country_scores[country] = top_100['IRATING'].mean()
+
+    top_countries_df = pd.DataFrame(list(country_scores.items()), columns=['LOCATION', 'avg_irating'])
+    top_countries_df = top_countries_df.sort_values('avg_irating', ascending=False).head(10)
+
+    return top_regions_df, top_countries_df
+
+def create_competitiveness_table(top_regions_df, top_countries_df):
+    """
+    Crea una figura de Plotly con dos tablas para el top 10 de regiones y países.
+    """
+    fig = go.Figure()
+
+    # --- Tabla de Regiones (Izquierda) ---
+    fig.add_trace(go.Table(
+        header=dict(
+            values=['<b>#</b>', '<b>Top 10 Regiones</b>', '<b>iRating Promedio</b>'],
+            fill_color='#1E1E1E',
+            align='center',
+            font=dict(color='white', size=12)
+        ),
+        cells=dict(
+            values=[
+                list(range(1, 11)),
+                top_regions_df['REGION'],
+                top_regions_df['avg_irating'].round(0).astype(int)
+            ],
+            fill_color='#323232',
+            align=['center', 'left', 'center'],
+            font=dict(color='white', size=11)
+        ),
+        domain=dict(x=[0, 0.48], y=[0, 1]) # Ocupa la mitad izquierda
+    ))
+
+    # --- Tabla de Países (Derecha) ---
+    fig.add_trace(go.Table(
+        header=dict(
+            values=['<b>#</b>', '<b>Top 10 Países</b>', '<b>iRating Promedio</b>'],
+            fill_color='#1E1E1E',
+            align='center',
+            font=dict(color='white', size=12)
+        ),
+        cells=dict(
+            values=[
+                list(range(1, 11)),
+                top_countries_df['LOCATION'],
+                top_countries_df['avg_irating'].round(0).astype(int)
+            ],
+            fill_color='#323232',
+            align=['center', 'left', 'center'],
+            font=dict(color='white', size=11)
+        ),
+        domain=dict(x=[0.52, 1], y=[0, 1]) # Ocupa la mitad derecha
+    ))
+
+    fig.update_layout(
+        title_text='🏆 Ranking de Competitividad (Promedio del Top 100)',
+        template='plotly_dark',
+        paper_bgcolor='#323232',
+        plot_bgcolor='#323232',
+        margin=dict(l=10, r=10, t=40, b=10),
+        height=300
+    )
+    return fig
+
+def create_region_bubble_chart(df):
+    # --- 1. DICCIONARIO DE COLORES POR REGIÓN (¡Personalízalo aquí!) ---
+    region_color_map = {
+        'US': '#0047AB',
+        'Iberia': '#FFC400',
+        'UK & I': '#C8102E',
+        'Brazil': '#009B3A',
+        'Australia & NZ': '#00008B',
+        'DE-AT-CH': '#FFCE00',
+        'Benelux': '#AE1C28',
+        'France': '#0055A4',
+        'Scandinavia': '#0065BD',
+        'Central EU': '#DC143C',
+        'Italy': '#009246',
+        'Japan': '#BC002D',
+        'Canada': '#FF0000',
+        # --- Color por defecto para el resto ---
+        'default': '#808080' 
+    }
+
+    # 2. Agrupación y cálculo de estadísticas (sin cambios)
+    df = df[df['REGION'] != 'Atlantic']
+    region_stats = df.groupby('REGION').agg(
+        avg_starts=('STARTS', 'mean'),
+        avg_irating=('IRATING', 'mean'),
+        num_pilots=('DRIVER', 'count')
+    ).reset_index()
+
+    region_stats = region_stats.sort_values('num_pilots', ascending=True)
+    hover_text_pilots = (region_stats['num_pilots'] / 1000).round(1).astype(str) + 'k'
+
+    # --- 3. Asignar colores a cada región usando el diccionario ---
+    region_colors = region_stats['REGION'].map(region_color_map).fillna(region_color_map['default'])
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=region_stats['avg_irating'],
+        y=region_stats['avg_starts'],
+        mode='markers+text',
+        text=region_stats['REGION'],
+        textposition='top center',
+        textfont=dict(size=10, color='rgba(255, 255, 255, 0.8)'),
+
+        # --- 4. MODIFICACIONES CLAVE EN EL MARCADOR ---
+        marker=dict(
+            size=region_stats['num_pilots'],
+            sizemode='area',
+            sizeref=2.*max(region_stats['num_pilots'])/(50.**2.3), 
+            sizemin=6,
+            color=region_colors,         # <-- Usamos los colores del diccionario
+            showscale=False              # <-- Ocultamos la barra de color
+        ),
+        # --- El hover no necesita cambios ---
+        customdata=np.stack((hover_text_pilots, region_stats['num_pilots']), axis=-1),
+        hovertemplate=(
+            "<b>%{text}</b><br>" +
+            "Promedio iRating: %{x:.0f}<br>" +
+            "Promedio Carreras: %{y:.1f}<br>" +
+            "Cantidad de Pilotos: %{customdata[0]} (%{customdata[1]:,})<extra></extra>"
+        )
+    ))
+
+    fig.update_layout(
+        title='Regiones: iRating, Carreras y Cantidad de Pilotos',
+        xaxis_title='iRating Promedio',
+        yaxis_title='Promedio de Carreras Corridas',
+        template='plotly_dark',
+        
+        paper_bgcolor='#323232',
+        plot_bgcolor='#323232',
+        # --- AÑADIMOS ESTILO DE GRID IGUAL AL HISTOGRAMA ---
+        xaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
+        yaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
+        # --- FIN DEL ESTILO DE GRID ---
+        margin=dict(l=20, r=20, t=50, b=20),
+        
+        height=350
+    )
+    return fig
+
+def create_kpi_global(filtered_df, filter_context="Mundo"):
+    total_pilots = len(filtered_df)
+    avg_irating = filtered_df['IRATING'].mean() if total_pilots > 0 else 0
+    avg_starts = filtered_df['STARTS'].mean() if total_pilots > 0 else 0
+    avg_wins = filtered_df['WINS'].mean() if total_pilots > 0 else 0
+
+    fig = go.Figure()
+    kpis = [
+        {'value': total_pilots, 'title': f"Pilotos en {filter_context}", 'format': ',.0f'},
+        {'value': avg_irating, 'title': "iRating Promedio", 'format': ',.0f'},
+        {'value': avg_starts, 'title': "Carreras Promedio", 'format': '.1f'},
+        {'value': avg_wins, 'title': "Victorias Promedio", 'format': '.2f'}
+    ]
+    for i, kpi in enumerate(kpis):
+        fig.add_trace(go.Indicator(
+            mode="number",
+            value=kpi['value'],
+            number={'valueformat': kpi['format'], 'font': {'size': 35}},
+            title={"text": kpi['title'], 'font': {'size': 14}},
+            domain={'row': 0, 'column': i}
+        ))
+    fig.update_layout(
+        grid={'rows': 1, 'columns': 4, 'pattern': "independent"},
+        template='plotly_dark',
+        paper_bgcolor='#323232',
+        plot_bgcolor='#323232',
+        margin=dict(l=20, r=20, t=30, b=10),
+        height=120
+    )
+    return fig
+
+
+def create_kpi_pilot(filtered_df, pilot_info=None, filter_context="Mundo"):
+    fig = go.Figure()
+    if pilot_info is not None:
+        rank_world = pilot_info.get('Rank World', 0)
+        rank_region = pilot_info.get('Rank Region', 0)
+        rank_country = pilot_info.get('Rank Country', 0)
+        percentil_world = (1 - (rank_world / len(df))) * 100 if len(df) > 0 else 0
+        region_df = df[df['REGION'] == pilot_info.get('REGION')]
+        percentil_region = (1 - (rank_region / len(region_df))) * 100 if len(region_df) > 0 else 0
+        country_df = df[df['LOCATION'] == pilot_info.get('LOCATION')]
+        percentil_country = (1 - (rank_country / len(country_df))) * 100 if len(country_df) > 0 else 0
+        kpis_piloto = [
+            {'rank': rank_world, 'percentil': percentil_world, 'title': "Rank Mundial"},
+            {'rank': rank_region, 'percentil': percentil_region, 'title': "Rank Región"},
+            {'rank': rank_country, 'percentil': percentil_country, 'title': "Rank País"}
+        ]
+        for i, kpi in enumerate(kpis_piloto):
+            fig.add_trace(go.Indicator(
+                mode="number",
+                value=kpi['rank'],
+                number={'prefix': "#", 'font': {'size': 30}},
+                title={"text": f"{kpi['title']}<br><span style='font-size:0.8em;color:gray'>Top {100-kpi['percentil']:.2f}%</span>", 'font': {'size': 14}},
+                domain={'row': 0, 'column': i}
+            ))
+    fig.update_layout(
+        grid={'rows': 1, 'columns': 3, 'pattern': "independent"},
+        template='plotly_dark',
+        paper_bgcolor='#323232',
+        plot_bgcolor='#323232',
+        margin=dict(l=20, r=20, t=30, b=10),
+        height=120
+    )
+    return fig
 
 def create_density_heatmap(df):
     # --- 1. Preparación de datos ---
@@ -207,9 +458,106 @@ def create_continent_map(df, selected_region='ALL', selected_country='ALL'):
 
     fig.update_layout(
         template='plotly_dark',
-        geo=dict(bgcolor='rgba(0,0,0,0)', lakecolor='#4E5D6C', landcolor='#323232', subunitcolor='grey'),
+        # --- BLOQUE MODIFICADO ---
+        paper_bgcolor='rgba(0,0,0,0)', # Fondo de toda la figura (transparente)
+        plot_bgcolor='rgba(0,0,0,0)',  # Fondo del área del mapa (transparente)
+        # --- FIN DE LA MODIFICACIÓN ---
+        geo=dict(
+            bgcolor='rgba(0,0,0,0)',    # Fondo específico del globo (transparente)
+            lakecolor='#4E5D6C', 
+            landcolor='#323232', 
+            subunitcolor='rgba(0,0,0,0)',
+            showframe=False,      # <-- Oculta el marco exterior del globo
+            showcoastlines=False  # <-- Oculta las líneas de la costa
+        ),
         margin={"r":0,"t":40,"l":0,"b":0},
-        coloraxis_showscale=show_scale
+        coloraxis_showscale=show_scale,
+        coloraxis_colorbar=dict(
+            title='Pilotos',
+            orientation='h',
+            yanchor='bottom',
+            y=-0.05,
+            xanchor='center',
+            x=0.5,
+            len=0.5,
+            thickness=10
+        )
+    )
+    return fig
+
+def create_kpi_indicators(filtered_df, pilot_info=None, filter_context="Mundo"):
+    """
+    Crea un panel de indicadores (KPIs) para datos generales y de un piloto específico.
+    """
+    fig = go.Figure()
+
+    # --- FILA 1: DATOS GENERALES (DEL DATAFRAME FILTRADO) ---
+    total_pilots = len(filtered_df)
+    avg_irating = filtered_df['IRATING'].mean() if total_pilots > 0 else 0
+    avg_starts = filtered_df['STARTS'].mean() if total_pilots > 0 else 0
+    avg_wins = filtered_df['WINS'].mean() if total_pilots > 0 else 0
+
+    kpis_generales = [
+        {'value': total_pilots, 'title': f"Pilotos en {filter_context}", 'format': ',.0f'},
+        {'value': avg_irating, 'title': "iRating Promedio", 'format': ',.0f'},
+        {'value': avg_starts, 'title': "Carreras Promedio", 'format': '.1f'},
+        {'value': avg_wins, 'title': "Victorias Promedio", 'format': '.2f'}
+    ]
+
+    for i, kpi in enumerate(kpis_generales):
+        fig.add_trace(go.Indicator(
+            mode="number",
+            value=kpi['value'],
+            number={'valueformat': kpi['format'], 'font': {'size': 35}},
+            title={"text": kpi['title'], 'font': {'size': 14}},
+            domain={'row': 0, 'column': i}
+        ))
+
+    # --- FILA 2: DATOS DEL PILOTO SELECCIONADO ---
+    if pilot_info is not None:
+        rank_world = pilot_info.get('Rank World', 0)
+        rank_region = pilot_info.get('Rank Region', 0)
+        rank_country = pilot_info.get('Rank Country', 0)
+        
+        # Calculamos el percentil
+        percentil_world = (1 - (rank_world / len(df))) * 100 if len(df) > 0 else 0
+        
+        region_df = df[df['REGION'] == pilot_info.get('REGION')]
+        percentil_region = (1 - (rank_region / len(region_df))) * 100 if len(region_df) > 0 else 0
+        
+        country_df = df[df['LOCATION'] == pilot_info.get('LOCATION')]
+        percentil_country = (1 - (rank_country / len(country_df))) * 100 if len(country_df) > 0 else 0
+
+        kpis_piloto = [
+            {'rank': rank_world, 'percentil': percentil_world, 'title': "Rank Mundial"},
+            {'rank': rank_region, 'percentil': percentil_region, 'title': "Rank Región"},
+            {'rank': rank_country, 'percentil': percentil_country, 'title': "Rank País"}
+        ]
+
+        for i, kpi in enumerate(kpis_piloto):
+             fig.add_trace(go.Indicator(
+                mode="number",
+                value=kpi['rank'],
+                number={'prefix': "#", 'font': {'size': 30}},
+                title={"text": f"{kpi['title']}<br><span style='font-size:0.8em;color:gray'>Top {100-kpi['percentil']:.2f}%</span>", 'font': {'size': 14}},
+                domain={'row': 1, 'column': i+1} # Centramos los 3 KPIs del piloto
+            ))
+
+    # --- DISEÑO GENERAL DEL GRÁFICO ---
+    title_text = f"Estadísticas Globales ({filter_context})"
+    if pilot_info is not None:
+        title_text = f"<b>{pilot_info['DRIVER']}</b> vs. Global ({filter_context})"
+
+    fig.update_layout(
+        grid={'rows': 2, 'columns': 4, 'pattern': "independent"},
+        template='plotly_dark',
+        paper_bgcolor='#323232',
+        plot_bgcolor='#323232',
+        title={
+            'text': title_text,
+            'y':0.95, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'
+        },
+        margin=dict(l=20, r=20, t=50, b=20)
     )
     return fig
 
@@ -263,14 +611,14 @@ def create_histogram_with_percentiles(df, column='IRATING', bin_width=100, highl
     if highlight_irating is not None and highlight_name is not None:
         fig.add_vline(
             x=highlight_irating, 
-            line_width=1, 
-            line_dash="dash", 
-            annotation_position="bottom right", # Mejor posición para texto vertical
+            line_width=.5, 
+            line_dash="dot", 
+            annotation_position="top left", # Mejor posición para texto vertical
             annotation_textangle=-90, # <-- AÑADE ESTA LÍNEA PARA ROTAR EL TEXTO
-            line_color="yellow",
+            line_color="white",
             annotation_text=f"<b>{highlight_name}</b>",
             annotation_font_size=10,
-            annotation_font_color="yellow"
+            annotation_font_color="white"
         )
     # --- FIN DEL BLOQUE NUEVO ---
 
@@ -360,7 +708,7 @@ iracing_ragions = {
     'Italy':['IT'],
     'Central EU':['PL','CZ','SK','HU','SI','HR','RS','ME','AL','RO','MD','UA','BY','EE','LV','LT'],
     'Finland':['FI'],
-    'DE-AT-CH':['CH','AT','DE'], # <-- CORREGIDO: Eliminado el ''
+    'DE-AT-CH':['CH','AT','DE'], # <-- CORRECCIÓN: Eliminado el ''
     'Scandinavia':['DK','SE','NO'],
     'Australia & NZ':['AU','NZ'],
     'Asia':['SA','JO','IQ','YE','OM','AE','QA','IN','PK','AF','NP','BD','MM','TH','KH','VN','MY','ID','CN','PH','KR','MN','KZ','KG','UZ','TJ','AF','TM','LK'],
@@ -369,9 +717,9 @@ iracing_ragions = {
 
 # --- 1. Carga y Preparación de Datos ---
 df = pd.read_csv('Sports_Car_driver_stats.csv')
-df = df[df['IRATING'] > 100]
-df = df[df['STARTS'] > 20]
-df = df[df['STARTS'] < 2000]
+df = df[df['IRATING'] > 10]
+df = df[df['STARTS'] > 1]
+#df = df[df['STARTS'] < 2000]
 df = df[df['CLASS'].str.contains('D|C|B|A|P', na=False)]
 print(len(df))
 
@@ -411,7 +759,7 @@ df_for_graphs = df.copy() # Usamos una copia completa para los gráficos
 # --- MODIFICACIÓN: Nos aseguramos de que el df principal tenga todas las columnas necesarias ---
 df = df[['DRIVER','IRATING','LOCATION','STARTS','WINS','AVG_START_POS','AVG_FINISH_POS','AVG_INC','TOP25PCNT', 'REGION', 'Rank World', 'Rank Region', 'Rank Country','CLASS']]
 
-# Aplica solo el emoji/código si está en country_flags, si no deja el valor original
+# Aplica solo el emoji/código si está in country_flags, si no deja el valor original
 # OJO: Esta línea ahora debe ir dentro del callback, ya que las columnas cambian
 # df_table['LOCATION'] = df_table['LOCATION'].map(lambda x: flag_img(x) if x in country_flags else x)
 
@@ -423,12 +771,15 @@ density_heatmap = dcc.Graph(
 )
 
 
+kpi_global = dcc.Graph(id='kpi-global', style={'height': '120px', 'marginBottom': '10px'})
+kpi_pilot = dcc.Graph(id='kpi-pilot', style={'height': '120px', 'marginBottom': '10px'})
+
 histogram_irating = dcc.Graph(
     id='histogram-plot',
     # --- MODIFICACIÓN: Ajustamos el estilo del contenedor del gráfico ---
     style={
         'height': '40vh',
-        'borderRadius': '4px', # Coincide con el radio de los filtros
+        'borderRadius': '10px', # Coincide con el radio de los filtros
         'border': '1px solid #4A4A4A', # Coincide con el borde de los filtros
         'overflow': 'hidden'
     },
@@ -448,7 +799,6 @@ interactive_table = dash_table.DataTable(
     page_current=0,
     page_size=20,
     page_count=len(df_table) // 20 + (1 if len(df_table) % 20 > 0 else 0),
-    active_cell={'row': 0, 'column': 1, 'column_id': 'DRIVER'},
     virtualization=False,
     style_as_list_view=False,
     
@@ -492,6 +842,11 @@ interactive_table = dash_table.DataTable(
             'if': {'state': 'active'},
             'backgroundColor': 'rgba(0, 111, 255, 0.3)',
             'border': '1px solid rgb(0, 111, 255)'
+        },
+        {
+            'if': {'state': 'selected'},
+            'backgroundColor': 'rgba(0, 111, 255, 0)',
+            'border': '1px solid rgb(0, 111, 255,0)'
         },
         # --- REGLAS MEJORADAS CON BORDES REDONDEADOS ---
         {'if': {'filter_query': '{CLASS} contains "P"','column_id': 'CLASS'}, 
@@ -576,6 +931,28 @@ continent_map = dcc.Graph(
     figure=create_continent_map(df_for_graphs)
 )
 
+region_bubble_chart = dcc.Graph(
+    id='region-bubble-chart',
+    style={'height': '350px', 'marginTop': '10px','borderRadius': '10px','border': '1px solid #4A4A4A', # Coincide con el borde de los filtros
+        'overflow': 'hidden'},
+    figure=create_region_bubble_chart(df)
+)
+
+# --- NUEVO: Cálculo y creación de la tabla de competitividad ---
+top_regions, top_countries = calculate_competitiveness(df)
+competitiveness_table = dcc.Graph(
+    id='competitiveness-table',
+    figure=create_competitiveness_table(top_regions, top_countries),
+    config={'displayModeBar': False}, # Opcional: oculta la barra de herramientas
+    style={
+        'height': '300px',
+        'marginTop': '10px',
+        'borderRadius': '10px',
+        'border': '1px solid #4A4A4A',
+        'overflow': 'hidden'
+    }
+)
+
 # --- 3. Inicialización de la App ---
 app = dash.Dash(__name__)
 
@@ -650,7 +1027,7 @@ app.layout = html.Div(
                 ),
                 # Columna Central (Gráficos)
                 html.Div(
-                    id='middle-column', # <-- AÑADIMOS ESTE ID
+                    id='middle-column',
                     style={
                         'width': '30%', 
                         'padding': '10px',
@@ -659,10 +1036,10 @@ app.layout = html.Div(
                         'borderRadius': '15px'
                     },
                     children=[
-                        histogram_irating,      # Gráfico de arriba
-                        #scatter_irating_starts, # Gráfico del medio
+                        kpi_pilot,
+                        histogram_irating,
+                        competitiveness_table, # <-- AÑADIMOS LA NUEVA TABLA AQUÍ
                         density_heatmap
-                        #correlation_heatmap,     # Gráfico de abajo (NUEVO)
                     ]
                 ),
                 # Columna Derecha (Mapa)
@@ -675,7 +1052,9 @@ app.layout = html.Div(
                         'flexDirection': 'column'
                     },
                     children=[
-                        html.Div(continent_map, style={'flex': '1.2'}) # Damos más peso al mapa
+                        kpi_global,
+                        html.Div(continent_map, style={'flex': '1.2'}),
+                        region_bubble_chart  # <-- Añade aquí
                     ]
                 )
             ]
@@ -693,7 +1072,10 @@ app.layout = html.Div(
                 'display': 'none'  # Oculto por defecto
             }
         ),
-        # dcc.Store(id='shared-data-store', data={})
+        dcc.Store(id='shared-data-store', data={}),
+        dcc.Store(id='shared-data-store_1', data={})
+
+            
     ]
 )
 # --- 4. Callbacks ---
@@ -714,6 +1096,25 @@ def update_country_options(selected_region):
     options = [{'label': 'Todos', 'value': 'ALL'}] + \
               [{'label': country, 'value': country} for country in sorted(countries)]
     return options
+
+# --- NUEVO CALLBACK: FILTRAR POR PAÍS AL HACER CLIC EN EL MAPA ---
+@app.callback(
+    Output('country-filter', 'value'),
+    Input('continent-map', 'clickData'),
+    prevent_initial_call=True
+)
+def update_country_filter_on_map_click(clickData):
+    # Si no hay datos de clic (por ejemplo, al cargar la página), no hacemos nada.
+    if not clickData:
+        return dash.no_update
+    
+    # Extraemos el código de país de 2 letras del 'customdata' que definimos en el gráfico.
+    # clickData['points'][0] se refiere al primer país clickeado.
+    # ['customdata'][0] se refiere al primer elemento de nuestra lista custom_data, que es 'LOCATION_2_LETTER'.
+    country_code = clickData['points'][0]['customdata'][0]
+    
+    # Devolvemos el código del país, que actualizará el valor del dropdown 'country-filter'.
+    return country_code
 
 @app.callback(
     Output('pilot-search-dropdown', 'options'),
@@ -772,25 +1173,31 @@ def clear_pilot_search_on_filter_change(region, country):
     # Cuando un filtro principal cambia, reseteamos la selección del piloto
     return None
 
+
 # --- CALLBACK CONSOLIDADO: BÚSQUEDA Y TABLA ---
 @app.callback(
     Output('datatable-interactiva', 'data'),
     Output('datatable-interactiva', 'page_count'),
     Output('datatable-interactiva', 'columns'),
     Output('datatable-interactiva', 'page_current'),
-    Output('datatable-interactiva', 'active_cell'),
     Output('histogram-plot', 'figure'),
     Output('continent-map', 'figure'),
+    Output('kpi-global', 'figure'),   # <--- NUEVO
+    Output('kpi-pilot', 'figure'),    # <--- NUEVO
+    Output('shared-data-store', 'data'),
     Input('region-filter', 'value'),
+    
     Input('country-filter', 'value'),
+    
     Input('pilot-search-dropdown', 'value'),
     Input('datatable-interactiva', 'page_current'),
     Input('datatable-interactiva', 'page_size'),
     Input('datatable-interactiva', 'sort_by'),
-    Input('datatable-interactiva', 'active_cell'),
+
+    Input('datatable-interactiva', 'active_cell')
 )
 def update_table_and_search(region_filter, country_filter, selected_pilot,
-                           page_current, page_size, sort_by, active_cell):
+                           page_current, page_size, sort_by, state_active_cell):
     
     ctx = dash.callback_context
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
@@ -826,23 +1233,27 @@ def update_table_and_search(region_filter, country_filter, selected_pilot,
 
     # --- 4. LÓGICA DE BÚSQUEDA Y NAVEGACIÓN (CORREGIDA) ---
     target_page = page_current
-    new_active_cell = active_cell
+    new_active_cell = state_active_cell
+
+    # Si el callback fue disparado por un cambio en los filtros,
+    # reseteamos la celda activa y la página.
+    if triggered_id in ['region-filter', 'country-filter']:
+        new_active_cell = None
+        target_page = 0  # <-- Esto hace que siempre se muestre la primera página
 
     # Si la búsqueda de piloto activó el callback, calculamos la nueva página y celda activa
-    if triggered_id == 'pilot-search-dropdown' and selected_pilot:
-        # Buscamos la posición del piloto en el dataframe ya filtrado y ordenado
+    elif triggered_id == 'pilot-search-dropdown' and selected_pilot:
         match_index = filtered_df.index.get_loc(df[df['DRIVER'] == selected_pilot].index[0])
-        
         if match_index is not None:
             target_page = match_index // page_size
-            
             driver_column_index = list(filtered_df.columns).index('DRIVER')
             new_active_cell = {
                 'row': match_index % page_size,
+                'row_id': match_index % page_size,
                 'column': driver_column_index,
                 'column_id': 'DRIVER'
             }
-    
+
     # --- 5. GENERACIÓN DE COLUMNAS PARA LA TABLA ---
     columns_definition = []
     for col_name in filtered_df.columns:
@@ -872,13 +1283,11 @@ def update_table_and_search(region_filter, country_filter, selected_pilot,
     graph_indices = filtered_df.index
     highlight_irating = None
     highlight_name = None
+    pilot_info_for_kpi = None # Variable para guardar los datos del piloto
     
-    # Determinar qué piloto señalar en el histograma
     pilot_to_highlight = selected_pilot
     
-    # Si la interacción fue un clic, obtenemos el piloto de la celda activa
     if triggered_id == 'datatable-interactiva' and new_active_cell:
-        # El índice de la fila en el dataframe filtrado
         row_index_in_df = (target_page * page_size) + new_active_cell['row']
         if row_index_in_df < len(filtered_df):
             pilot_to_highlight = filtered_df.iloc[row_index_in_df]['DRIVER']
@@ -886,14 +1295,24 @@ def update_table_and_search(region_filter, country_filter, selected_pilot,
     if pilot_to_highlight:
         pilot_data = df[df['DRIVER'] == pilot_to_highlight]
         if not pilot_data.empty:
-            highlight_irating = pilot_data.iloc[0]['IRATING']
-            highlight_name = pilot_data.iloc[0]['DRIVER']
+            pilot_info_for_kpi = pilot_data.iloc[0] # <-- Guardamos toda la info del piloto
+            highlight_irating = pilot_info_for_kpi['IRATING']
+            highlight_name = pilot_info_for_kpi['DRIVER']
     elif not filtered_df.empty:
-        # Si no hay selección, señalar al mejor de la vista actual
         top_pilot_in_view = filtered_df.nlargest(1, 'IRATING').iloc[0]
         highlight_irating = top_pilot_in_view['IRATING']
         highlight_name = top_pilot_in_view['DRIVER']
     
+    # --- NUEVO: Generamos el gráfico de KPIs ---
+    filter_context = "Mundo"
+    if country_filter and country_filter != 'ALL':
+        filter_context = country_filter
+    elif region_filter and region_filter != 'ALL':
+        filter_context = region_filter
+        
+    kpi_global_fig = create_kpi_global(filtered_df, filter_context)
+    kpi_pilot_fig = create_kpi_pilot(filtered_df, pilot_info_for_kpi, filter_context)
+
     updated_histogram_figure = create_histogram_with_percentiles(
         df.loc[graph_indices], 
         'IRATING', 
@@ -903,12 +1322,24 @@ def update_table_and_search(region_filter, country_filter, selected_pilot,
     )
 
     updated_map_figure = create_continent_map(df_for_graphs, region_filter, country_filter)
+
+    shared_data = {
+        'active_cell': new_active_cell,
+        'selected_pilot': selected_pilot or '',
+        'timestamp': str(pd.Timestamp.now())
+    }
+    
+    '''return (page_data, total_pages, columns_definition, target_page, 
+            new_active_cell, updated_histogram_figure, updated_map_figure)'''
     
     return (page_data, total_pages, columns_definition, target_page, 
-            new_active_cell, updated_histogram_figure, updated_map_figure)
+            updated_histogram_figure, updated_map_figure, 
+            kpi_global_fig,
+            kpi_pilot_fig,
+            shared_data)
 
 # --- NUEVO CALLBACK: IMPRIMIR DATOS DEL PILOTO SELECCIONADO ---
-'''@app.callback(
+@app.callback(
     Output('pilot-info-display', 'children'),  # Necesitarás añadir este componente al layout
     Input('datatable-interactiva', 'active_cell'),
     State('datatable-interactiva', 'data'),
@@ -950,20 +1381,61 @@ def print_selected_pilot_data(active_cell, table_data, region_filter, country_fi
 
 @app.callback(
     Output('datatable-interactiva', 'active_cell'),
-    Input('shared-data-store', 'data'),
+    Output('shared-data-store_1', 'data'),
+    
+
+    Input('datatable-interactiva', 'active_cell'),
+    State('shared-data-store', 'data'),
+    State('shared-data-store_1', 'data'),
+    Input('region-filter', 'value'),
+    Input('country-filter', 'value'),
     prevent_initial_call=True
 )
-def update_active_cell_from_store(shared_data):
-    if not shared_data:
+def update_active_cell_from_store(active_cell,ds,ds1,a,b):
+    print(ds1)
+    print(ds)
+    print(active_cell)
+
+
+    if not ds:
         return None
+    if not ds1:
+        ds1 = ds
+        if ds.get('selected_pilot', '') == '':
+
+            return active_cell,ds1
+        return ds.get('active_cell'),ds1
     
-    active_cell = shared_data.get('active_cell')
+    if ds.get('selected_pilot', '') == ds1.get('selected_pilot', ''):
+        ds1 = ds
+
+        if active_cell == ds1.get('active_cell'):
+            
+            return None,ds1
+        ds1['active_cell'] = active_cell
+
+        
+        return active_cell,ds1
+    else:
+        ds1 = ds
+        return ds.get('active_cell'),ds1
+
+    
+    
+    
+    '''active_cell = a
     selected_pilot = shared_data.get('selected_pilot', '')
+    print('..............')
+    print(shared_data)
     
     print(f"DEBUG: Recuperando active_cell del store: {active_cell}")
     print(f"DEBUG: Piloto asociado: {selected_pilot}")
+    shared_data['shared_data'] = ''
     
-    return active_cell
-'''
+    return active_cell'''
+
+
+
+
 if __name__ == "__main__":
     app.run(debug=True)
