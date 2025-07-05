@@ -1,5 +1,3 @@
-
-
 /* assets/custom.css */
 .dash-table-container .dash-spreadsheet-container .dash-cell {
     height: calc(70vh / 21.5); /* 70vh dividido por el número de filas por página */
@@ -12,11 +10,10 @@
   font-family: 'DashboardFont'; /* Dale un nombre para usarla en tu app */
   src: url('ADDCN___.ttf') format('truetype'); /* Apunta al archivo de tu fuente */
 }
-/* 2. Aplica la fuente a toda la aplicación 
-body {
+/* 2. Aplica la fuente a toda la aplicación */
+/* body {
   font-family: 'DashboardFont', sans-serif; Usa tu fuente. 'sans-serif' es un respaldo 
-}
-
+} */
 
 
 /* Opcional: Asegúrate de que los títulos también la usen */
@@ -25,9 +22,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .iracing-dropdown .Select-control {
-    background-color: #323232 !important; /* Fondo gris oscuro */
+    background-color: rgba(11, 11, 19, 1) !important; /* Fondo gris oscuro */
     border: 1px solid #4A4A4A !important; /* Borde sutil un poco más claro */
-    border-radius: 4px !important;
+    border-radius: 4px !important;  
     box-shadow: none !important; /* Sin sombras */
 }
 
