@@ -1,8 +1,13 @@
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap'); /* <-- MODIFICACIÓN: Añadimos ;900 */
+
+
 body {
   margin: 5px;
   padding: 0;
-  background-color: rgba(18,18,26,255);
+  background-color: rgba(5,5,15,255);
   color: #ffffff;
+  font-family: 'Lato', sans-serif; /* <-- AÑADE ESTA LÍNEA */
+  font-weight: 700; /* <-- AÑADE ESTA LÍNEA para usar el grosor "Black" */
 }
 
 p {
@@ -20,7 +25,7 @@ p {
 
 
 /* Media Query para pantallas medianas y pequeñas (1200px o menos) */
-@media (max-width: 800px) {
+@media (max-width: 1200px) {
     /* Cambiamos la dirección del contenedor principal a vertical */
     #main-content-container {
         flex-direction: column; /* Las columnas se apilan una encima de la otra */
@@ -92,7 +97,7 @@ label {
 
 /* --- ESTILOS PARA LOS BOTONES DEL TIPO DE TABLERO --- */
 .dashboard-type-button {
-    background-color: #323232;
+    background-color: rgba(18,18,26,.5);
     color: white;
     border: 1px solid #4A4A4A;
     padding: 8px 16px;
@@ -123,4 +128,31 @@ label {
 
 .iracing-dropdown.active-filter .Select-arrow {
     border-top-color: #FFFFFF;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Aplicamos la animación al cuerpo del HTML */
+body {
+  animation: fadeIn 0.8s ease-in-out;
+}
+
+/* --- ESTILOS DEFINITIVOS PARA DROPDOWNS --- */
+
+/* 1. Color del texto del placeholder (ej: "Buscar Piloto...") */
+.iracing-dropdown .Select-placeholder {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* 2. Color del texto que se escribe en el buscador */
+.iracing-dropdown .Select-input > input {
+  color: white !important;
+}
+
+/* 3. Color del texto del piloto una vez que ha sido seleccionado */
+.iracing-dropdown .Select-value-label {
+  color: white !important;
 }
