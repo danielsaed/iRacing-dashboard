@@ -18,6 +18,101 @@ import plotly.graph_objects as go
 import pycountry_convert as pc
 import pycountry
 
+def create_irating_starts_scatter(df):
+    """
+    Crea un gráfico de dispersión optimizado para mostrar la relación
+    entre iRating y las carreras iniciadas.
+    """
+    fig = go.Figure(data=go.Scattergl(
+        x=df['IRATING'],
+        y=df['STARTS'],
+        mode='markers',
+        marker=dict(
+            color='rgba(0, 111, 255, 0.3)', # Color azul semitransparente para ver la densidad
+            size=5,
+            line=dict(width=0) # Sin borde en los puntos
+        ),
+        # Desactivamos el hover para máxima velocidad, ya que son demasiados puntos
+        hoverinfo='none'
+    ))
+    
+    fig.update_layout(
+        title='Relación iRating vs. Carreras Iniciadas',
+        xaxis_title='iRating',
+        yaxis_title='Carreras Iniciadas (Starts)',
+        template='plotly_dark',
+        paper_bgcolor='rgba(11,11,19,1)',
+        plot_bgcolor='rgba(11,11,19,1)',
+        # Estilo de la cuadrícula igual al histograma y bubble chart
+        xaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
+        yaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
+        margin=dict(l=40, r=20, t=40, b=40)
+    )
+    return fig
+
+
+def create_irating_trend_line_chart(df):
+    """
+    Crea un gráfico de líneas que muestra el promedio de carreras corridas
+    para diferentes rangos de iRating, eliminando valores atípicos.
+    """
+    # --- 1. Eliminar Outliers ---
+    # Calculamos el percentil 99 para las carreras y filtramos para
+    # que unos pocos pilotos con miles de carreras no desvíen el promedio.
+    max_starts = df['STARTS'].quantile(0.95)
+    min_starts = df['STARTS'].quantile(0.001)
+    print(max_starts)
+    print(min_starts)
+    df_filtered = df[df['STARTS'] <= max_starts]
+    df_filtered = df[df['STARTS'] >= min_starts]
+
+    # --- 2. Agrupar iRating en Bins ---
+    # Creamos los rangos de 0 a 11000, en pasos de 1000.
+    bins = list(range(0, 12000, 1000))
+    labels = [f'{i/1000:.0f}k - {i/1000+1-0.001:.1f}k' for i in bins[:-1]]
+    
+    df_filtered['irating_bin'] = pd.cut(df_filtered['IRATING'], bins=bins, labels=labels, right=False)
+
+    # --- 3. Calcular el promedio de carreras por bin ---
+    trend_data = df_filtered.groupby('irating_bin').agg(
+        avg_starts=('STARTS', 'mean'),
+        num_pilots=('DRIVER', 'count')
+    ).reset_index()
+
+    # --- 4. Crear el Gráfico ---
+    fig = go.Figure(data=go.Scatter(
+        x=trend_data['irating_bin'],
+        y=trend_data['avg_starts'],
+        mode='lines+markers', # Líneas y puntos en cada dato
+        marker=dict(
+            color='rgba(0, 111, 255, 1)',
+            size=8,
+            line=dict(width=1, color='white')
+        ),
+        line=dict(color='rgba(0, 111, 255, 0.7)'),
+        
+        customdata=trend_data['num_pilots'],
+        hovertemplate=(
+            "<b>Rango iRating:</b> %{x}<br>" +
+            "<b>Promedio Carreras:</b> %{y:.0f}<br>" +
+            "<b>Pilotos en este rango:</b> %{customdata:,}<extra></extra>"
+        )
+    ))
+    
+    fig.update_layout(
+        title='Tendencia: Carreras Promedio por Nivel de iRating',
+        xaxis_title='Rango de iRating',
+        yaxis_title='Promedio de Carreras Corridas',
+        template='plotly_dark',
+        paper_bgcolor='rgba(11,11,19,1)',
+        plot_bgcolor='rgba(11,11,19,1)',
+        font=GLOBAL_FONT,
+        xaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
+        yaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
+        margin=dict(l=50, r=20, t=40, b=40)
+    )
+    return fig
+
 
 def calculate_competitiveness(df):
     """
@@ -37,7 +132,7 @@ def calculate_competitiveness(df):
 
     # Convertimos a DataFrame, ordenamos y tomamos el top 10
     top_regions_df = pd.DataFrame(list(region_scores.items()), columns=['REGION', 'avg_irating'])
-    top_regions_df = top_regions_df.sort_values('avg_irating', ascending=False).head(10)
+    top_regions_df = top_regions_df.sort_values('avg_irating', ascending=False)
 
     # --- Cálculo para Países ---
     # Mismo proceso para países
@@ -50,7 +145,7 @@ def calculate_competitiveness(df):
         country_scores[country] = top_100['IRATING'].mean()
 
     top_countries_df = pd.DataFrame(list(country_scores.items()), columns=['LOCATION', 'avg_irating'])
-    top_countries_df = top_countries_df.sort_values('avg_irating', ascending=False).head(10)
+    top_countries_df = top_countries_df.sort_values('avg_irating', ascending=False)
 
     return top_regions_df, top_countries_df
 
@@ -180,8 +275,8 @@ def create_region_bubble_chart(df):
         yaxis_title='Promedio de Carreras Corridas',
         template='plotly_dark',
         
-        paper_bgcolor='#323232',
-        plot_bgcolor='#323232',
+        paper_bgcolor='rgba(11,11,19,1)',
+        plot_bgcolor='rgba(11,11,19,1)',
         # --- AÑADIMOS ESTILO DE GRID IGUAL AL HISTOGRAMA ---
         xaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
         yaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
@@ -209,52 +304,77 @@ def create_kpi_global(filtered_df, filter_context="Mundo"):
         fig.add_trace(go.Indicator(
             mode="number",
             value=kpi['value'],
-            number={'valueformat': kpi['format'], 'font': {'size': 35}},
+            number={'valueformat': kpi['format'], 'font': {'size': 28}},
             title={"text": kpi['title'], 'font': {'size': 14}},
             domain={'row': 0, 'column': i}
         ))
     fig.update_layout(
         grid={'rows': 1, 'columns': 4, 'pattern': "independent"},
         template='plotly_dark',
-        paper_bgcolor='#323232',
+        paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='#323232',
         margin=dict(l=20, r=20, t=30, b=10),
-        height=120
+        height=60
     )
     return fig
 
 
 def create_kpi_pilot(filtered_df, pilot_info=None, filter_context="Mundo"):
     fig = go.Figure()
-    if pilot_info is not None:
-        rank_world = pilot_info.get('Rank World', 0)
-        rank_region = pilot_info.get('Rank Region', 0)
-        rank_country = pilot_info.get('Rank Country', 0)
-        percentil_world = (1 - (rank_world / len(df))) * 100 if len(df) > 0 else 0
-        region_df = df[df['REGION'] == pilot_info.get('REGION')]
-        percentil_region = (1 - (rank_region / len(region_df))) * 100 if len(region_df) > 0 else 0
-        country_df = df[df['LOCATION'] == pilot_info.get('LOCATION')]
-        percentil_country = (1 - (rank_country / len(country_df))) * 100 if len(country_df) > 0 else 0
-        kpis_piloto = [
-            {'rank': rank_world, 'percentil': percentil_world, 'title': "Rank Mundial"},
-            {'rank': rank_region, 'percentil': percentil_region, 'title': "Rank Región"},
-            {'rank': rank_country, 'percentil': percentil_country, 'title': "Rank País"}
-        ]
-        for i, kpi in enumerate(kpis_piloto):
-            fig.add_trace(go.Indicator(
-                mode="number",
-                value=kpi['rank'],
-                number={'prefix': "#", 'font': {'size': 30}},
-                title={"text": f"{kpi['title']}<br><span style='font-size:0.8em;color:gray'>Top {100-kpi['percentil']:.2f}%</span>", 'font': {'size': 14}},
-                domain={'row': 0, 'column': i}
-            ))
+    
+    title_text = "Seleccione un Piloto"
+    
+    # Si NO hay información del piloto, creamos una figura vacía y ocultamos los ejes.
+    if pilot_info is None:
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            xaxis_visible=False,  # <-- OCULTA EL EJE X
+            yaxis_visible=False,  # <-- OCULTA EL EJE Y
+            height=10
+        )
+        return fig
+
+    # Si SÍ hay información del piloto, procedemos como antes.
+    pilot_name = pilot_info.get('DRIVER', 'Piloto')
+    title_text = f"<b>{pilot_name}</b>"
+
+    rank_world = pilot_info.get('Rank World', 0)
+    rank_region = pilot_info.get('Rank Region', 0)
+    rank_country = pilot_info.get('Rank Country', 0)
+    percentil_world = (1 - (rank_world / len(df))) * 100 if len(df) > 0 else 0
+    region_df = df[df['REGION'] == pilot_info.get('REGION')]
+    percentil_region = (1 - (rank_region / len(region_df))) * 100 if len(region_df) > 0 else 0
+    country_df = df[df['LOCATION'] == pilot_info.get('LOCATION')]
+    percentil_country = (1 - (rank_country / len(country_df))) * 100 if len(country_df) > 0 else 0
+    
+    kpis_piloto = [
+        {'rank': rank_world, 'percentil': percentil_world, 'title': "World Rank"},
+        {'rank': rank_region, 'percentil': percentil_region, 'title': "Region Rank "},
+        {'rank': rank_country, 'percentil': percentil_country, 'title': "Country Rank"}
+    ]
+
+    for i, kpi in enumerate(kpis_piloto):
+        fig.add_trace(go.Indicator(
+            mode="number",
+            value=kpi['rank'],
+            number={'prefix': "#", 'font': {'size': 18}},
+            # Eliminamos el <br> y ajustamos el texto para que esté en una línea
+            title={"text": f"{kpi['title']} <span style='font-size:0.8em;color:gray'>(Top {100-kpi['percentil']:.2f}%)</span>", 'font': {'size': 14}},
+            domain={'row': 0, 'column': i}
+        ))
     fig.update_layout(
+        title={
+            'text': title_text,
+            'y':0.95, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top',
+            'font': {'size': 14}
+        },
         grid={'rows': 1, 'columns': 3, 'pattern': "independent"},
         template='plotly_dark',
-        paper_bgcolor='#323232',
-        plot_bgcolor='#323232',
-        margin=dict(l=20, r=20, t=30, b=10),
-        height=120
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=20, r=20, t=40, b=10),
+        height=80
     )
     return fig
 
@@ -414,7 +534,7 @@ def create_continent_map(df, selected_region='ALL', selected_country='ALL'):
         range_color_val = [0, 2]
     else:
         color_column = 'PILOTOS'
-        color_scale = [[0.0, "#EBE8E8"], [0.01, "#BAC5DB"], [0.3, "#60D351"], [1.0, "rgba(0,111,255,1)"]]
+        color_scale = [[0.0, "#000000"], [0.01, "#122753"], [0.3, "#238ED6"], [0.6, "#1B2FA5"],[1.0, "rgba(255,255,255,1)"]]
         range_color_val = [0, 10000]
 
     # Creación del mapa base
@@ -623,17 +743,22 @@ def create_histogram_with_percentiles(df, column='IRATING', bin_width=100, highl
     # --- FIN DEL BLOQUE NUEVO ---
 
     fig.update_layout(
-        title='iRating Distribution',
+        title='Distribución de iRating',
         xaxis_title='iRating',
-        yaxis_title='Drivers',
+        yaxis_title='Pilotos',
         template='plotly_dark',
         hovermode='x unified',
-        # --- MODIFICACIÓN: Cambiamos el fondo para que coincida con los filtros ---
-        paper_bgcolor='#323232',
-        plot_bgcolor='#323232',
-        # --- FIN DE LA MODIFICACIÓN ---
+        paper_bgcolor='rgba(18,18,26,.5)',
+        plot_bgcolor='rgba(255,255,255,0)',
         xaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
-        yaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)')
+        yaxis=dict(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)'),
+        
+        # --- MODIFICACIÓN: Reducir márgenes y tamaño de fuentes ---
+        margin=dict(l=40, r=20, t=40, b=30), # Reduce los márgenes (izquierda, derecha, arriba, abajo)
+        title_font_size=16,                  # Reduce el tamaño del título principal
+        xaxis_title_font_size=12,            # Reduce el tamaño del título del eje X
+        yaxis_title_font_size=12             # Reduce el tamaño del título del eje Y
+        # --- FIN DE LA MODIFICACIÓN ---
     )
     
     return fig
@@ -677,6 +802,8 @@ country_flags = {
     # ...agrega los que necesites...
 }
 
+GLOBAL_FONT = {'family': "Lato, sans-serif"}
+
 country_coords = {
     'ES': {'lat': 40.4, 'lon': -3.7}, 'US': {'lat': 39.8, 'lon': -98.5},
     'BR': {'lat': -14.2, 'lon': -51.9}, 'DE': {'lat': 51.1, 'lon': 10.4},
@@ -716,11 +843,11 @@ iracing_ragions = {
 }
 
 # --- 1. Carga y Preparación de Datos ---
-df = pd.read_csv('Sports_Car_driver_stats.csv')
-df = df[df['IRATING'] > 10]
+df = pd.read_csv('ROAD.csv')
+df = df[df['IRATING'] > 1]
 df = df[df['STARTS'] > 1]
 #df = df[df['STARTS'] < 2000]
-df = df[df['CLASS'].str.contains('D|C|B|A|P', na=False)]
+df = df[df['CLASS'].str.contains('D|C|B|A|P|R', na=False)]
 print(len(df))
 
 # --- AÑADE ESTE BLOQUE PARA CREAR LA COLUMNA 'REGION' ---
@@ -771,14 +898,14 @@ density_heatmap = dcc.Graph(
 )
 
 
-kpi_global = dcc.Graph(id='kpi-global', style={'height': '120px', 'marginBottom': '10px'})
-kpi_pilot = dcc.Graph(id='kpi-pilot', style={'height': '120px', 'marginBottom': '10px'})
+kpi_global = dcc.Graph(id='kpi-global', style={'height': '3hv', 'marginBottom': '0px'})
+kpi_pilot = dcc.Graph(id='kpi-pilot', style={'height': '3hv', 'marginBottom': '10px'})
 
 histogram_irating = dcc.Graph(
     id='histogram-plot',
     # --- MODIFICACIÓN: Ajustamos el estilo del contenedor del gráfico ---
     style={
-        'height': '40vh',
+        'height': '25vh',
         'borderRadius': '10px', # Coincide con el radio de los filtros
         'border': '1px solid #4A4A4A', # Coincide con el borde de los filtros
         'overflow': 'hidden'
@@ -800,8 +927,8 @@ interactive_table = dash_table.DataTable(
     page_size=20,
     page_count=len(df_table) // 20 + (1 if len(df_table) % 20 > 0 else 0),
     virtualization=False,
-    style_as_list_view=False,
-    active_cell={'row': 0,'column':1},
+    style_as_list_view=True,
+    active_cell={'row': 21,'column':1},
     
     
     # --- ELIMINAMOS selected_rows Y AÑADIMOS active_cell ---
@@ -815,16 +942,17 @@ interactive_table = dash_table.DataTable(
         'width': '100%',
         'borderRadius': '15px',
         'overflow': 'hidden',
-        'backgroundColor': 'rgb(0, 0, 0)',
+        'backgroundColor': 'rgba(11,11,19,1)',
         'textOverflow': 'ellipsis',
+        'border': '1px solid #4A4A4A'
         
     },
     
     style_cell={
         'textAlign': 'center',
         'padding': '1px',
-        'backgroundColor': 'rgb(0, 0, 0)',
-        'color': 'rgb(255, 255, 255,1)',
+        'backgroundColor': 'rgba(11,11,19,1)',
+        'color': 'rgb(255, 255, 255,.8)',
         'border': '1px solid rgba(255, 255, 255, 0)',
         'overflow': 'hidden',
         'textOverflow': 'ellipsis',
@@ -832,7 +960,7 @@ interactive_table = dash_table.DataTable(
         'maxWidth': 0
     },
     style_header={
-        'backgroundColor': 'rgb(10, 10, 10)',
+        'backgroundColor': 'rgba(30,30,38,1)',
         'fontWeight': 'bold',
         'color': 'white',
         'border': 'none',
@@ -843,31 +971,31 @@ interactive_table = dash_table.DataTable(
         {
             'if': {'state': 'active'},
             'backgroundColor': 'rgba(0, 111, 255, 0.3)',
-            'border': '1px solid rgb(0, 111, 255)'
+            'border': '1px solid rgba(0, 111, 255)'
         },
         {
             'if': {'state': 'selected'},
             'backgroundColor': 'rgba(0, 111, 255, 0)',
-            'border': '1px solid rgb(0, 111, 255,0)'
+            'border': '1px solid rgba(0, 111, 255,0)'
         },
         # --- REGLAS MEJORADAS CON BORDES REDONDEADOS ---
         {'if': {'filter_query': '{CLASS} contains "P"','column_id': 'CLASS'}, 
-         'backgroundColor': 'white', 'color': 'black', 'fontWeight': 'bold'},
+         'backgroundColor': 'rgba(54,54,62,255)', 'color': 'rgba(166,167,171,255)', 'fontWeight': 'bold','border': '1px solid rgba(134,134,142,255)'},
         
         {'if': {'filter_query': '{CLASS} contains "A"','column_id': 'CLASS'}, 
-         'backgroundColor': 'blue', 'color': 'white', 'fontWeight': 'bold'},
+         'backgroundColor': 'rgba(0,42,102,255)', 'color': 'rgba(107,163,238,255)', 'fontWeight': 'bold','border': '1px solid rgba(35,104,195,255)'},
         
         {'if': {'filter_query': '{CLASS} contains "B"','column_id': 'CLASS'}, 
-         'backgroundColor': 'green', 'color': 'white', 'fontWeight': 'bold'},
+         'backgroundColor': 'rgba(24,84,14,255)', 'color': 'rgba(139,224,105,255)', 'fontWeight': 'bold','border': '1px solid rgba(126,228,103,255)'},
         
         {'if': {'filter_query': '{CLASS} contains "C"','column_id': 'CLASS'}, 
-         'backgroundColor': 'yellow', 'color': 'black', 'fontWeight': 'bold'},
+         'backgroundColor': 'rgba(81,67,6,255)', 'color': 'rgba(224,204,109,255)', 'fontWeight': 'bold','border': '1px solid rgba(220,193,76,255)'},
         
         {'if': {'filter_query': '{CLASS} contains "D"','column_id': 'CLASS'}, 
-         'backgroundColor': 'orange', 'color': 'white', 'fontWeight': 'bold'},
+         'backgroundColor': 'rgba(102,40,3,255)', 'color': 'rgba(255,165,105,255)', 'fontWeight': 'bold','border': '1px solid rgba(208,113,55,255)'},
         
         {'if': {'filter_query': '{CLASS} contains "R"','column_id': 'CLASS'}, 
-         'backgroundColor': 'red', 'color': 'white', 'fontWeight': 'bold'},
+         'backgroundColor': 'rgba(91,19,20,255)', 'color': 'rgba(225,125,123,255)', 'fontWeight': 'bold','border': '1px solid rgba(172,62,61,255)'},
     ],
     # --- MODIFICACIÓN: Forzamos el ancho de las columnas ---
     style_cell_conditional=[
@@ -885,7 +1013,6 @@ interactive_table = dash_table.DataTable(
     style_data={
             'whiteSpace':'normal',
             'textAlign': 'center',
-            'fontWeight': 'bold',
             'fontSize': 12,},
      # Renderizado virtual
 )
@@ -929,38 +1056,121 @@ correlation_heatmap = dcc.Graph(
 
 continent_map = dcc.Graph(
     id='continent-map',
-    style={'height': '50vh'},
+    style={'height': '60vh'},
     figure=create_continent_map(df_for_graphs)
 )
 
 region_bubble_chart = dcc.Graph(
     id='region-bubble-chart',
-    style={'height': '350px', 'marginTop': '10px','borderRadius': '10px','border': '1px solid #4A4A4A', # Coincide con el borde de los filtros
+    style={'height': '350px', 'marginTop': '10px','borderRadius': '10px','border': '1px solid #4A4A4A',
         'overflow': 'hidden'},
     figure=create_region_bubble_chart(df)
 )
 
-# --- NUEVO: Cálculo y creación de la tabla de competitividad ---
-top_regions, top_countries = calculate_competitiveness(df)
-competitiveness_table = dcc.Graph(
-    id='competitiveness-table',
-    figure=create_competitiveness_table(top_regions, top_countries),
-    config={'displayModeBar': False}, # Opcional: oculta la barra de herramientas
-    style={
-        'height': '300px',
-        'marginTop': '10px',
-        'borderRadius': '10px',
-        'border': '1px solid #4A4A4A',
-        'overflow': 'hidden'
-    }
+# --- NUEVO: Gráfico de dispersión iRating vs Starts ---
+irating_starts_scatter = dcc.Graph(
+    id='irating-starts-scatter',
+    # Copiamos el estilo del bubble chart para que sea consistente
+    style={'height': '350px', 'marginTop': '10px', 'borderRadius': '10px', 'border': '1px solid #4A4A4A', 'overflow': 'hidden'},
+    figure=create_irating_trend_line_chart(df), # <-- MODIFICAMOS ESTA LÍNEA
+    # Ya no es necesario que sea estático, la interacción es útil aquí
+    config={'displayModeBar': False}
 )
+
+# --- MODIFICACIÓN: Reemplazamos el dcc.Graph por dos dash_table.DataTable ---
+# Primero, preparamos los datos y las columnas para las tablas
+top_regions, top_countries = calculate_competitiveness(df)
+
+# Añadimos la columna de ranking '#' a cada dataframe
+top_regions.insert(0, '#', range(1, 1 + len(top_regions)))
+top_countries.insert(0, '#', range(1, 1 + len(top_countries)))
+
+# Definimos un estilo base para ambas tablas, copiado de la tabla principal
+table_style_base = {
+    'style_table': {
+        'borderRadius': '10px',
+        'overflow': 'hidden',
+        'border': '1px solid #4A4A4A'
+    },
+    'style_cell': {
+        'textAlign': 'center',
+        'padding': '0px',
+        'backgroundColor': 'rgba(11,11,19,1)',
+        'color': 'rgb(255, 255, 255,.8)',
+        'border': 'none',
+        'font_size': '12px',
+        # --- ELIMINAMOS LA ALTURA FIJA DE LA CELDA Y DE LA TABLA ---
+    },
+    'style_header': {
+        'backgroundColor': 'rgba(30,30,38,1)',
+        'fontWeight': 'bold',
+        'color': 'white',
+        'border': 'none',
+        'textAlign': 'center'
+    },
+    'style_cell_conditional': [
+        {'if': {'column_id': '#'}, 'width': '10%', 'textAlign': 'center'},
+        {'if': {'column_id': 'REGION'}, 'width': '50%', 'textAlign': 'left'},
+        {'if': {'column_id': 'LOCATION'}, 'width': '50%', 'textAlign': 'left'},
+        {'if': {'column_id': 'avg_irating'}, 'width': '40%', 'textAlign': 'center'},
+    ]
+}
+
+# Creamos el contenedor principal que pondrá las tablas una al lado de la otra
+competitiveness_tables_container = html.Div(
+    style={'display': 'flex', 'gap': '2%', 'marginTop': '10px'},
+    children=[
+        # Tabla de Regiones
+        html.Div(
+            dash_table.DataTable(
+                columns=[
+                    {'name': '#', 'id': '#'},
+                    {'name': 'Top Regiones', 'id': 'REGION'},
+                    {'name': 'iRating Promedio', 'id': 'avg_irating'}
+                ],
+                data=top_regions.to_dict('records'),
+                virtualization=False,
+                page_action='none',
+                fixed_rows={'headers': True},
+                # --- MODIFICACIÓN: Combinamos los diccionarios de estilo ---
+                style_table={**table_style_base['style_table'], 'height': '20vh'},
+                style_cell=table_style_base['style_cell'],
+                style_header=table_style_base['style_header'],
+                style_cell_conditional=table_style_base['style_cell_conditional']
+            ),
+            style={'width': '49%'}
+        ),
+        # Tabla de Países
+        html.Div(
+            dash_table.DataTable(
+                columns=[
+                    {'name': '#', 'id': '#'},
+                    {'name': 'Top Países', 'id': 'LOCATION'},
+                    {'name': 'iRating Promedio', 'id': 'avg_irating'}
+                ],
+                data=top_countries.to_dict('records'),
+                virtualization=False,
+                page_action='none',
+                fixed_rows={'headers': True},
+                # --- MODIFICACIÓN: Combinamos los diccionarios de estilo ---
+                style_table={**table_style_base['style_table'], 'height': '20vh'},
+                style_cell=table_style_base['style_cell'],
+                style_header=table_style_base['style_header'],
+                style_cell_conditional=table_style_base['style_cell_conditional']
+            ),
+            style={'width': '49%'}
+        )
+    ]
+)
+# --- FIN DE LA MODIFICACIÓN ---
 
 # --- 3. Inicialización de la App ---
 app = dash.Dash(__name__)
 
 # Layout principal
 app.layout = html.Div(
-    style={'height': '100vh', 'display': 'flex', 'flexDirection': 'column', 'backgroundColor': '#1E1E1E'},
+    #style={'height': '100vh', 'display': 'flex', 'flexDirection': 'column', 'backgroundColor': '#1E1E1E'},
+    style={},
     children=[
         
         # --- BARRA SUPERIOR: TÍTULO Y BOTONES DE TIPO DE DASHBOARD ---
@@ -969,7 +1179,9 @@ app.layout = html.Div(
             children=[
                 html.H1("Top iRating", style={'fontSize': 48, 'color': 'white', 'margin': '0 0 10px 0'}),
                 html.Div([
-                    html.Button('Road', id='btn-road', n_clicks=0, className='dashboard-type-button'),
+                     # <-- AÑADIDO
+                    html.Button('Sports Car', id='btn-road', n_clicks=0, className='dashboard-type-button'),
+                    html.Button('Formula', id='btn-formula', n_clicks=0, className='dashboard-type-button'),
                     html.Button('Oval', id='btn-oval', n_clicks=0, className='dashboard-type-button'),
                     html.Button('Dirt Road', id='btn-dirt-road', n_clicks=0, className='dashboard-type-button'),
                     html.Button('Dirt Oval', id='btn-dirt-oval', n_clicks=0, className='dashboard-type-button'),
@@ -980,13 +1192,14 @@ app.layout = html.Div(
         # --- CONTENEDOR PRINCIPAL CON 3 COLUMNAS ---
         html.Div(
             id='main-content-container',
-            style={'display': 'flex', 'flex': 1, 'minHeight': 0, 'padding': '0 10px 10px 10px'},
+            #style={'display': 'flex', 'flex': 1, 'minHeight': 0, 'padding': '0 10px 10px 10px'},
+            style={'display': 'flex', 'padding': '0 10px 10px 10px'},
             children=[
                 
                 # --- COLUMNA IZQUIERDA (FILTROS Y TABLA) ---
                 html.Div(
                     id='left-column',
-                    style={'width': '35%', 'padding': '10px', 'display': 'flex', 'flexDirection': 'column'},
+                    style={'width': '25%', 'padding': '1%', 'display': 'flex', 'flexDirection': 'column'},
                     children=[
                         # Contenedor de Filtros
                         html.Div(
@@ -1027,11 +1240,20 @@ app.layout = html.Div(
                                         searchable=True,
                                         clearable=True,
                                         search_value='',
+                                        # --- AÑADE ESTA LÍNEA PARA CAMBIAR EL COLOR DEL TEXTO ---
+                                        style={'color': 'white'}
                                     )
                                 ], style={'flex': 1})
                             ]
                         ),
                         # Contenedor de la Tabla
+                        
+                        html.Div(
+                            kpi_pilot, 
+                            style={
+                                'marginTop': '2%'      # Pone los KPIs por delante del mapa
+                            }
+                        ),
                         html.Div(interactive_table, style={'flex': 1})
                     ]
                 ),
@@ -1039,28 +1261,58 @@ app.layout = html.Div(
                 # --- COLUMNA CENTRAL ---
                 html.Div(
                     id='middle-column',
-                    style={'width': '25%', 'padding': '10px', 'display': 'flex', 'flexDirection': 'column'},
+                    style={'width': '50%', 'padding': '1%', 'display': 'flex', 'flexDirection': 'column'},
                     children=[
-                        kpi_pilot,
-                        competitiveness_table,
-                        histogram_irating
+                        html.Div(
+                            kpi_global, 
+                            style={
+                                'width': '70%',
+                                'margin': '0 auto',
+                                'position': 'relative', # Necesario para que z-index funcione
+                                'z-index': '10'         # Pone los KPIs por delante del mapa
+                            }
+                        ),
+                        html.Div(
+                            continent_map, 
+                            style={
+                                'flex': 1, 
+                                'minHeight': 0,
+                                'marginTop': '-10%' # <-- Mueve el mapa 80px hacia arriba
+                            }
+                        ),
+                        html.Div(
+                            histogram_irating, 
+                            style={
+                                'width': '95%',
+                                'marginTop': '5%',
+                                'margin': '3% auto',
+                                
+                                'position': 'relative', # Necesario para que z-index funcione
+                                'z-index': '10'         # Pone los KPIs por delante del mapa
+                            }
+                        ),
+                        
                     ]
                 ),
                 
                 # --- COLUMNA DERECHA ---
                 html.Div(
                     id='right-column',
-                    style={'width': '40%', 'padding': '10px', 'display': 'flex', 'flexDirection': 'column'},
+                    style={'width': '25%', 'padding': '1%', 'display': 'flex', 'flexDirection': 'column'},
                     children=[
-                        kpi_global,
-                        html.Div(continent_map, style={'flex': 1, 'minHeight': 0}),
-                        region_bubble_chart
+                        
+                        competitiveness_tables_container,
+                        region_bubble_chart,
+                        irating_starts_scatter # <-- AÑADE ESTA LÍNEA
+                        
                     ]
                 )
             ]
         ),
         
         # Componentes ocultos
+        # --- ELIMINA EL dcc.Store ---
+        dcc.Store(id='active-discipline-store', data='ROAD.csv'),
         dcc.Store(id='shared-data-store', data={}),
         dcc.Store(id='shared-data-store_1', data={}),
         html.Div(id='pilot-info-display', style={'display': 'none'})
@@ -1068,6 +1320,31 @@ app.layout = html.Div(
 )
 
 # --- 4. Callbacks ---
+
+# --- ELIMINA EL CALLBACK update_data_source ---
+
+@app.callback(
+    Output('active-discipline-store', 'data'),
+    Input('btn-road', 'n_clicks'),
+    Input('btn-formula', 'n_clicks'),
+    Input('btn-oval', 'n_clicks'),
+    Input('btn-dirt-road', 'n_clicks'),
+    Input('btn-dirt-oval', 'n_clicks'),
+    prevent_initial_call=True
+)
+def update_active_discipline(road, formula, oval, dr, do):
+    ctx = dash.callback_context
+    button_id = ctx.triggered_id.split('.')[0]
+    
+    file_map = {
+        'btn-road': 'ROAD.csv',
+        'btn-formula': 'FORMULA.csv',
+        'btn-oval': 'OVAL.csv',
+        'btn-dirt-road': 'DROAD.csv',
+        'btn-dirt-oval': 'DOVAL.csv'
+    }
+    return file_map.get(button_id, 'ROAD.csv')
+
 
 # NUEVO CALLBACK: Actualiza las opciones del filtro de país según la región seleccionada
 @app.callback(
@@ -1186,18 +1463,24 @@ def update_filter_styles(region_value, country_value, pilot_value):
     return region_class, country_class, pilot_class
 
 
+
+
+
 # --- CALLBACK PARA ESTILO DE BOTONES ACTIVOS ---
 @app.callback(
+    Output('btn-formula', 'style'), # <-- AÑADIDO
     Output('btn-road', 'style'),
     Output('btn-oval', 'style'),
     Output('btn-dirt-road', 'style'),
     Output('btn-dirt-oval', 'style'),
+    Input('btn-formula', 'n_clicks'), # <-- AÑADIDO
     Input('btn-road', 'n_clicks'),
     Input('btn-oval', 'n_clicks'),
+   
     Input('btn-dirt-road', 'n_clicks'),
     Input('btn-dirt-oval', 'n_clicks')
 )
-def update_button_styles(road_clicks, oval_clicks, dirt_road_clicks, dirt_oval_clicks):
+def update_button_styles(formula_clicks, road_clicks, oval_clicks, dirt_road_clicks, dirt_oval_clicks): # <-- AÑADIDO
     # Estilos base para los botones
     base_style = {'width': '120px'} # Asegura que todos tengan el mismo ancho
     active_style = {
@@ -1210,25 +1493,27 @@ def update_button_styles(road_clicks, oval_clicks, dirt_road_clicks, dirt_oval_c
     ctx = dash.callback_context
     if not ctx.triggered_id:
         # Estado inicial: 'Road' activo por defecto
-        return active_style, base_style, base_style, base_style
+        return base_style, active_style, base_style, base_style, base_style # <-- MODIFICADO
 
     button_id = ctx.triggered_id
 
     # Devolver el estilo activo para el botón presionado y el base para los demás
-    if button_id == 'btn-road':
-        return active_style, base_style, base_style, base_style
+    if button_id == 'btn-formula': # <-- AÑADIDO
+        return active_style, base_style, base_style, base_style, base_style
+    elif button_id == 'btn-road':
+        return base_style, active_style, base_style, base_style, base_style # <-- MODIFICADO
     elif button_id == 'btn-oval':
-        return base_style, active_style, base_style, base_style
+        return base_style, base_style, active_style, base_style, base_style # <-- MODIFICADO
     elif button_id == 'btn-dirt-road':
-        return base_style, base_style, active_style, base_style
+        return base_style, base_style, base_style, active_style, base_style # <-- MODIFICADO
     elif button_id == 'btn-dirt-oval':
-        return base_style, base_style, base_style, active_style
+        return base_style, base_style, base_style, base_style, active_style # <-- MODIFICADO
     
     # Fallback por si acaso
-    return base_style, base_style, base_style, base_style
+    return base_style, base_style, base_style, base_style, base_style # <-- MODIFICADO
 
 
-# --- CALLBACK CONSOLIDADO: BÚSQUEDA Y TABLA ---
+# --- CALLBACK CONSOLIDADO: BÚSQUEDA Y TABLA (MODIFICADO PARA LEER DEL STORE) ---
 @app.callback(
     Output('datatable-interactiva', 'data'),
     Output('datatable-interactiva', 'page_count'),
@@ -1236,28 +1521,64 @@ def update_button_styles(road_clicks, oval_clicks, dirt_road_clicks, dirt_oval_c
     Output('datatable-interactiva', 'page_current'),
     Output('histogram-plot', 'figure'),
     Output('continent-map', 'figure'),
-    Output('kpi-global', 'figure'),   # <--- NUEVO
-    Output('kpi-pilot', 'figure'),    # <--- NUEVO
+    Output('kpi-global', 'figure'),
+    Output('kpi-pilot', 'figure'),
     Output('shared-data-store', 'data'),
+    # --- ELIMINAMOS LOS BOTONES COMO INPUTS ---
+    # Input('btn-road', 'n_clicks'),
+    # Input('btn-formula', 'n_clicks'),
+    # Input('btn-oval', 'n_clicks'),
+    # Input('btn-dirt-road', 'n_clicks'),
+    # Input('btn-dirt-oval', 'n_clicks'),
+    # --- LOS INPUTS AHORA EMPIEZAN CON LOS FILTROS ---
     Input('region-filter', 'value'),
-    
     Input('country-filter', 'value'),
-    
     Input('pilot-search-dropdown', 'value'),
     Input('datatable-interactiva', 'page_current'),
     Input('datatable-interactiva', 'page_size'),
     Input('datatable-interactiva', 'sort_by'),
-
-    Input('datatable-interactiva', 'active_cell')
+    Input('datatable-interactiva', 'active_cell'),
+    # --- AÑADIMOS EL STORE COMO STATE ---
+    State('active-discipline-store', 'data'),
+    # --- AÑADIMOS UN INPUT DEL STORE PARA REACCIONAR AL CAMBIO ---
+    Input('active-discipline-store', 'data')
 )
-def update_table_and_search(region_filter, country_filter, selected_pilot,
-                           page_current, page_size, sort_by, state_active_cell):
+def update_table_and_search(
+    region_filter, country_filter, selected_pilot,
+    page_current, page_size, sort_by, state_active_cell,
+    active_discipline_filename, # <-- Nuevo argumento desde el State
+    discipline_change_trigger # <-- Nuevo argumento desde el Input
+):
     
     ctx = dash.callback_context
-    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else 'region-filter'
 
-    # --- 1. LÓGICA DE COLUMNAS DINÁMICAS ---
-    base_cols = ['DRIVER', 'IRATING', 'LOCATION', 'REGION', 'STARTS', 'WINS', 'CLASS']
+    # --- 1. LECTURA DEL ARCHIVO DESDE EL STORE ---
+    # Ya no necesitamos el file_map aquí, simplemente usamos el nombre del archivo guardado.
+    filename = active_discipline_filename
+    
+    # --- 2. PROCESAMIENTO DE DATOS (se hace cada vez) ---
+    # Leemos y procesamos el archivo seleccionado
+    df = pd.read_csv(filename)
+    df = df[df['IRATING'] > 1]
+    df = df[df['STARTS'] > 1]
+    df = df[df['CLASS'].str.contains('D|C|B|A|P|R', na=False)]
+
+    country_to_region_map = {country: region for region, countries in iracing_ragions.items() for country in countries}
+    df['REGION'] = df['LOCATION'].map(country_to_region_map).fillna('International')
+    
+    df['Rank World'] = df['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
+    df['Rank Region'] = df.groupby('REGION')['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
+    df['Rank Country'] = df.groupby('LOCATION')['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
+    
+    df['CLASS'] = df['CLASS'].str[0]
+    df_for_graphs = df.copy() # Copia para gráficos que no deben ser filtrados
+
+    # --- 3. LÓGICA DE FILTRADO Y VISUALIZACIÓN (sin cambios) ---
+    # El resto de la función sigue igual, pero ahora opera sobre el 'df' que acabamos de cargar.
+    
+    # Lógica de columnas dinámicas
+    base_cols = ['DRIVER', 'IRATING', 'LOCATION', 'REGION','CLASS', 'STARTS', 'WINS' ]
     if country_filter and country_filter != 'ALL':
         dynamic_cols = ['Rank Country'] + base_cols
     elif region_filter and region_filter != 'ALL':
@@ -1265,14 +1586,12 @@ def update_table_and_search(region_filter, country_filter, selected_pilot,
     else:
         dynamic_cols = ['Rank World'] + base_cols
 
-    # --- 2. FILTRADO DE DATOS ---
+    # Filtrado de datos
     if not region_filter: region_filter = 'ALL'
     if not country_filter: country_filter = 'ALL'
 
-    # Empezamos con una copia del dataframe original con las columnas necesarias
     filtered_df = df[dynamic_cols].copy()
     
-    # Aplicamos filtros de región y país
     if region_filter != 'ALL':
         filtered_df = filtered_df[filtered_df['REGION'] == region_filter]
     if country_filter != 'ALL':
@@ -1291,7 +1610,10 @@ def update_table_and_search(region_filter, country_filter, selected_pilot,
 
     # Si el callback fue disparado por un cambio en los filtros,
     # reseteamos la celda activa y la página.
-    if triggered_id in ['region-filter', 'country-filter']:
+    if triggered_id in [
+        'region-filter', 'country-filter', 
+        'btn-road', 'btn-formula', 'btn-oval', 'btn-dirt-road', 'btn-dirt-oval'
+    ]:
         new_active_cell = None
         target_page = 0  # <-- Esto hace que siempre se muestre la primera página
 
@@ -1307,6 +1629,8 @@ def update_table_and_search(region_filter, country_filter, selected_pilot,
                 'column': driver_column_index,
                 'column_id': 'DRIVER'
             }
+
+   
 
     # --- 5. GENERACIÓN DE COLUMNAS PARA LA TABLA ---
     columns_definition = []
@@ -1324,6 +1648,7 @@ def update_table_and_search(region_filter, country_filter, selected_pilot,
 
     # --- 6. PAGINACIÓN ---
     start_idx = target_page * page_size
+
     end_idx = start_idx + page_size
     
     # Aplicamos el formato de bandera a los datos de la página actual
