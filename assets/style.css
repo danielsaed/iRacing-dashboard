@@ -7,7 +7,7 @@ body {
   background-color: rgba(5,5,15,255);
   color: #ffffff;
   font-family: 'Lato', sans-serif; /* <-- AÑADE ESTA LÍNEA */
-  font-weight: 700; /* <-- AÑADE ESTA LÍNEA para usar el grosor "Black" */
+  font-weight: 500; /* <-- AÑADE ESTA LÍNEA para usar el grosor "Black" */
 }
 
 p {
@@ -66,15 +66,15 @@ p {
 
 /* Hacemos lo mismo para la cabecera de la tabla */
 #datatable-interactiva .dash-header {
-    font-size: clamp(9px, 0.7vw, 13px) !important;
-    padding: 4px 2px !important;
+    font-size: clamp(9px, 0.7vw, 10px) !important;
+    padding: 2px 1px !important;
 }
 
 /* --- ESTILOS PARA LOS DROPDOWNS Y LABELS (OPCIONAL PERO RECOMENDADO) --- */
 
 /* Hacemos que los filtros también sean un poco responsivos */
 .iracing-dropdown, .iracing-dropdown .Select-value-label, .iracing-dropdown .Select-placeholder {
-    font-size: clamp(10px, 0.8vw, 14px) !important;
+    font-size: clamp(10px, 0.8vw, 10px) !important;
 }
 
 label {
@@ -88,11 +88,20 @@ label {
 }
 
 #datatable-interactiva .dash-cell[data-dash-column="DRIVER"] {
-    font-size: 12px !important; /* ¡Aquí sí funcionará! */
+    font-size: 10px !important; /* ¡Aquí sí funcionará! */
 }
 
 #datatable-interactiva .dash-cell[data-dash-column="CLASS"] {
-    font-size: 14px !important; /* ¡Aquí sí funcionará! */
+    font-size: 12px !important; /* ¡Aquí sí funcionará! */
+}
+#datatable-interactiva .dash-cell[data-dash-column="IRATING"] {
+    font-size: 10px !important; /* ¡Aquí sí funcionará! */
+}
+#datatable-interactiva .dash-cell[data-dash-column="STARTS"] {
+    font-size: 10px !important; /* ¡Aquí sí funcionará! */
+}
+#datatable-interactiva .dash-cell[data-dash-column="WINS"] {
+    font-size: 10px !important; /* ¡Aquí sí funcionará! */
 }
 
 /* --- ESTILOS PARA LOS BOTONES DEL TIPO DE TABLERO --- */
@@ -100,12 +109,12 @@ label {
     background-color: rgba(18,18,26,.5);
     color: white;
     border: 1px solid #4A4A4A;
-    padding: 8px 16px;
+    padding: 8px 8px;
     border-radius: 5px;
     cursor: pointer;
     font-weight: bold;
     /* --- AJUSTES PARA TAMAÑO Y TRANSICIÓN --- */
-    width: 120px; /* Ancho fijo para todos los botones */
+    width: 80px; /* Ancho fijo para todos los botones */
     text-align: center;
     transition: background-color 0.2s, border-color 0.2s;
 }
