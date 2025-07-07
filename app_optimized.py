@@ -208,26 +208,7 @@ def create_competitiveness_table(top_regions_df, top_countries_df):
     return fig
 
 def create_region_bubble_chart(df):
-    # --- 1. DICCIONARIO DE COLORES POR REGIÓN (¡Personalízalo aquí!) ---
-    region_color_map = {
-        'US': '#0047AB',
-        'Iberia': '#FFC400',
-        'UK & I': '#C8102E',
-        'Brazil': '#009B3A',
-        'Australia & NZ': '#00008B',
-        'DE-AT-CH': '#FFCE00',
-        'Benelux': '#AE1C28',
-        'France': '#0055A4',
-        'Scandinavia': '#0065BD',
-        'Central EU': '#DC143C',
-        'Italy': '#009246',
-        'Japan': '#BC002D',
-        'Canada': '#FF0000',
-        # --- Color por defecto para el resto ---
-        'default': '#808080' 
-    }
-
-    # 2. Agrupación y cálculo de estadísticas (sin cambios)
+    
     df = df[df['REGION'] != 'Atlantic']
     region_stats = df.groupby('REGION').agg(
         avg_starts=('STARTS', 'mean'),
@@ -235,11 +216,11 @@ def create_region_bubble_chart(df):
         num_pilots=('DRIVER', 'count')
     ).reset_index()
 
+    # --- ¡CLAVE PARA EL ORDEN! ---
+    # Al ordenar de menor a mayor, Plotly dibuja las burbujas pequeñas al final,
+    # asegurando que queden por encima de las grandes. ¡Esto ya está correcto!
     region_stats = region_stats.sort_values('num_pilots', ascending=True)
     hover_text_pilots = (region_stats['num_pilots'] / 1000).round(1).astype(str) + 'k'
-
-    # --- 3. Asignar colores a cada región usando el diccionario ---
-    region_colors = region_stats['REGION'].map(region_color_map).fillna(region_color_map['default'])
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -248,18 +229,40 @@ def create_region_bubble_chart(df):
         mode='markers+text',
         text=region_stats['REGION'],
         textposition='top center',
-        textfont=dict(size=10, color='rgba(255, 255, 255, 0.8)'),
+        # --- MODIFICACIÓN: Añadimos fondo al texto ---
+        textfont=dict(
+            size=10, 
+            color='rgba(255, 255, 255, 0.9)',
+            family='Lato, sans-serif'
+        ),
+        # --- FIN DE LA MODIFICACIÓN ---
 
-        # --- 4. MODIFICACIONES CLAVE EN EL MARCADOR ---
         marker=dict(
             size=region_stats['num_pilots'],
             sizemode='area',
             sizeref=2.*max(region_stats['num_pilots'])/(50.**2.3), 
             sizemin=6,
-            color=region_colors,         # <-- Usamos los colores del diccionario
-            showscale=False              # <-- Ocultamos la barra de color
+            # --- MODIFICACIÓN: Coloreamos por número de pilotos ---
+            color=region_stats['num_pilots'],
+            # Usamos la misma escala de colores que el mapa para coherencia
+            colorscale=[
+                [0.0,  '#050A28'],
+                [0.05, '#0A1950'],
+                [0.15, '#0050B4'],
+                [0.3,  '#006FFF'],
+                [0.5,  '#3C96FF'],
+                [0.7,  '#82BEFF'],
+                [1.0,  '#DCEBFF']
+            ],
+            cmin=0,
+            cmax=20000,
+            showscale=True,
+            colorbar=dict(
+                title={'text': 'Pilotos', 'side': 'right'}, # Título de la barra de color actualizado
+                thickness=15
+            )
+            # --- FIN DE LA MODIFICACIÓN ---
         ),
-        # --- El hover no necesita cambios ---
         customdata=np.stack((hover_text_pilots, region_stats['num_pilots']), axis=-1),
         hovertemplate=(
             "<b>%{text}</b><br>" +
@@ -465,46 +468,7 @@ def country_to_continent_code(country_code):
         # Devuelve 'Otros' si el código no se encuentra o es inválido
         return 'Otros'
 
-'''def create_continent_map(df):
-    # Contamos cuántos pilotos hay en cada país
-    country_counts = df['LOCATION'].value_counts().reset_index()
-    country_counts.columns = ['LOCATION_2_LETTER', 'PILOTOS']
 
-    # --- CORRECCIÓN: Convertimos códigos de 2 letras a 3 letras ---
-    def alpha2_to_alpha3(code):
-        try:
-            return pycountry.countries.get(alpha_2=code).alpha_3
-        except AttributeError:
-            return None # Ignora códigos que no se pueden convertir
-
-    country_counts['LOCATION_3_LETTER'] = country_counts['LOCATION_2_LETTER'].apply(alpha2_to_alpha3)
-    
-    # Eliminamos filas que no se pudieron convertir
-    country_counts.dropna(subset=['LOCATION_3_LETTER'], inplace=True)
-
-    fig = px.choropleth(
-        country_counts,
-        locations="LOCATION_3_LETTER",  # <-- Usamos los códigos de 3 letras
-        locationmode="ISO-3",           # <-- Usamos el modo ISO-3
-        color="PILOTOS",
-        hover_name="LOCATION_2_LETTER", # Mostramos el código de 2 letras en el hover
-        color_continuous_scale=px.colors.sequential.Plasma,
-        scope="world",
-        projection="natural earth"
-    )
-    
-    fig.update_layout(
-        title_text='🌍 Pilotos por País',
-        template='plotly_dark',
-        geo=dict(
-            bgcolor='rgba(0,0,0,0)',
-            lakecolor='#4E5D6C',
-            landcolor='#323232',
-            subunitcolor='grey'
-        ),
-        margin={"r":0,"t":40,"l":0,"b":0}
-    )
-    return fig'''
 
 def create_continent_map(df, selected_region='ALL', selected_country='ALL'):
     # La preparación de datos es la misma
@@ -522,33 +486,17 @@ def create_continent_map(df, selected_region='ALL', selected_country='ALL'):
 
     # Lógica de coloreado y hover avanzada (sin cambios)
     show_scale = True 
-    if selected_region != 'ALL':
-        show_scale = False
-        countries_in_region = iracing_ragions.get(selected_region, [])
-        
-        def get_color_code(row):
-            if row['LOCATION_2_LETTER'] == selected_country: return 2
-            elif row['LOCATION_2_LETTER'] in countries_in_region: return 1
-            else: return 0
-
-        country_counts['COLOR'] = country_counts.apply(get_color_code, axis=1)
-        color_column = 'COLOR'
-        color_scale = [[0.0, 'rgba(50, 50, 50, 1)'], [0.5, 'rgba(0, 111, 255, 1)'], [1.0, 'rgba(0, 200, 80, 1)']]
-        range_color_val = [0, 2]
-    else:
-        color_column = 'PILOTOS'
-        # --- MODIFICACIÓN: Escala de color "Cozy/Futurista" con más puntos ---
-        color_scale = [
-            [0.0,  'rgba(50, 50, 50, 1)'],      # 1. Gris oscuro (casi sin pilotos)
-            [0.05, 'rgba(20, 30, 70, 1)'],      # 2. Transición a azul muy oscuro
-            [0.15, 'rgba(15, 60, 130, 1)'],     # 3. Azul profundo
-            [0.3,  'rgba(0, 111, 255, 1)'],     # 4. Azul principal del dashboard
-            [0.5,  'rgba(60, 140, 255, 1)'],    # 5. Azul más brillante
-            [0.7,  'rgba(120, 180, 255, 1)'],   # 6. Azul claro (Cian)
-            [1.0,  'rgba(210, 230, 255, 1)']    # 7. Resplandor final (casi blanco)
-        ]
-        # --- FIN DE LA MODIFICACIÓN ---
-        range_color_val = [0, 10000]
+    color_column = 'PILOTOS'
+    color_scale = [
+        [0.0,  '#050A28'],  # 1. Azul casi negro
+        [0.05, '#0A1950'],  # 2. Azul marino oscuro
+        [0.15, '#0050B4'],  # 3. Azul estándar
+        [0.3,  '#006FFF'],  # 4. Azul Eléctrico (punto focal)
+        [0.5,  '#3C96FF'],  # 5. Azul brillante
+        [0.7,  '#82BEFF'],  # 6. Azul claro (cielo)
+        [1.0,  '#DCEBFF']   # 7. Resplandor azulado (casi blanco)
+    ]
+    range_color_val = [0, 10000]
 
     # Creación del mapa base
     fig = px.choropleth(
@@ -654,10 +602,8 @@ def create_kpi_indicators(filtered_df, pilot_info=None, filter_context="Mundo"):
         
         # Calculamos el percentil
         percentil_world = (1 - (rank_world / len(df))) * 100 if len(df) > 0 else 0
-        
         region_df = df[df['REGION'] == pilot_info.get('REGION')]
         percentil_region = (1 - (rank_region / len(region_df))) * 100 if len(region_df) > 0 else 0
-        
         country_df = df[df['LOCATION'] == pilot_info.get('LOCATION')]
         percentil_country = (1 - (rank_country / len(country_df))) * 100 if len(country_df) > 0 else 0
 
@@ -838,25 +784,17 @@ def create_continent_map(df, selected_region='ALL', selected_country='ALL'):
 
     # Lógica de coloreado y hover avanzada (sin cambios)
     show_scale = True 
-    if selected_region != 'ALL':
-        show_scale = False
-        countries_in_region = iracing_ragions.get(selected_region, [])
-        
-        def get_color_code(row):
-            if row['LOCATION_2_LETTER'] == selected_country: return 2
-            elif row['LOCATION_2_LETTER'] in countries_in_region: return 1
-            else: return 0
-
-        country_counts['COLOR'] = country_counts.apply(get_color_code, axis=1)
-        color_column = 'COLOR'
-        color_scale = [[0.0, 'rgba(50, 50, 50, 1)'], [0.5, 'rgba(0, 111, 255, 1)'], [1.0, 'rgba(0, 200, 80, 1)']]
-        range_color_val = [0, 2]
-    else:
-        color_column = 'PILOTOS'
-        # --- MODIFICACIÓN: Cambiamos la escala de color a una de gris a azul ---
-        color_scale = [[0.0, 'rgba(80, 80, 80, 1)'], [1.0, 'rgba(0, 111, 255, 1)']]
-        # --- FIN DE LA MODIFICACIÓN ---
-        range_color_val = [0, 10000]
+    color_column = 'PILOTOS'
+    color_scale = [
+        [0.0,  '#050A28'],  # 1. Azul casi negro
+        [0.05, '#0A1950'],  # 2. Azul marino oscuro
+        [0.15, '#0050B4'],  # 3. Azul estándar
+        [0.3,  '#006FFF'],  # 4. Azul Eléctrico (punto focal)
+        [0.5,  '#3C96FF'],  # 5. Azul brillante
+        [0.7,  '#82BEFF'],  # 6. Azul claro (cielo)
+        [1.0,  '#DCEBFF']   # 7. Resplandor azulado (casi blanco)
+    ]
+    range_color_val = [0, 10000]
 
     # Creación del mapa base
     fig = px.choropleth(
@@ -962,10 +900,8 @@ def create_kpi_indicators(filtered_df, pilot_info=None, filter_context="Mundo"):
         
         # Calculamos el percentil
         percentil_world = (1 - (rank_world / len(df))) * 100 if len(df) > 0 else 0
-        
         region_df = df[df['REGION'] == pilot_info.get('REGION')]
         percentil_region = (1 - (rank_region / len(region_df))) * 100 if len(region_df) > 0 else 0
-        
         country_df = df[df['LOCATION'] == pilot_info.get('LOCATION')]
         percentil_country = (1 - (rank_country / len(country_df))) * 100 if len(country_df) > 0 else 0
 
@@ -1146,25 +1082,17 @@ def create_continent_map(df, selected_region='ALL', selected_country='ALL'):
 
     # Lógica de coloreado y hover avanzada (sin cambios)
     show_scale = True 
-    if selected_region != 'ALL':
-        show_scale = False
-        countries_in_region = iracing_ragions.get(selected_region, [])
-        
-        def get_color_code(row):
-            if row['LOCATION_2_LETTER'] == selected_country: return 2
-            elif row['LOCATION_2_LETTER'] in countries_in_region: return 1
-            else: return 0
-
-        country_counts['COLOR'] = country_counts.apply(get_color_code, axis=1)
-        color_column = 'COLOR'
-        color_scale = [[0.0, 'rgba(50, 50, 50, 1)'], [0.5, 'rgba(0, 111, 255, 1)'], [1.0, 'rgba(0, 200, 80, 1)']]
-        range_color_val = [0, 2]
-    else:
-        color_column = 'PILOTOS'
-        # --- MODIFICACIÓN: Cambiamos la escala de color a una de gris a azul ---
-        color_scale = [[0.0, 'rgba(80, 80, 80, 1)'], [1.0, 'rgba(0, 111, 255, 1)']]
-        # --- FIN DE LA MODIFICACIÓN ---
-        range_color_val = [0, 10000]
+    color_column = 'PILOTOS'
+    color_scale = [
+        [0.0,  '#050A28'],  # 1. Azul casi negro
+        [0.05, '#0A1950'],  # 2. Azul marino oscuro
+        [0.15, '#0050B4'],  # 3. Azul estándar
+        [0.3,  '#006FFF'],  # 4. Azul Eléctrico (punto focal)
+        [0.5,  '#3C96FF'],  # 5. Azul brillante
+        [0.7,  '#82BEFF'],  # 6. Azul claro (cielo)
+        [1.0,  '#DCEBFF']   # 7. Resplandor azulado (casi blanco)
+    ]
+    range_color_val = [0, 10000]
 
     # Creación del mapa base
     fig = px.choropleth(
@@ -1270,10 +1198,8 @@ def create_kpi_indicators(filtered_df, pilot_info=None, filter_context="Mundo"):
         
         # Calculamos el percentil
         percentil_world = (1 - (rank_world / len(df))) * 100 if len(df) > 0 else 0
-        
         region_df = df[df['REGION'] == pilot_info.get('REGION')]
         percentil_region = (1 - (rank_region / len(region_df))) * 100 if len(region_df) > 0 else 0
-        
         country_df = df[df['LOCATION'] == pilot_info.get('LOCATION')]
         percentil_country = (1 - (rank_country / len(country_df))) * 100 if len(country_df) > 0 else 0
 
@@ -1312,7 +1238,6 @@ def create_kpi_indicators(filtered_df, pilot_info=None, filter_context="Mundo"):
         font=GLOBAL_FONT
     )
     return fig
-
 
 def create_histogram_with_percentiles(df, column='IRATING', bin_width=100, highlight_irating=None, highlight_name=None):
     # Crear bins específicos de 100 en 100
@@ -1470,7 +1395,7 @@ country_coords = {
     'BR': {'lat': -14.2, 'lon': -51.9}, 'DE': {'lat': 51.1, 'lon': 10.4},
     'FR': {'lat': 46.2, 'lon': 2.2}, 'IT': {'lat': 41.8, 'lon': 12.5},
     'GB': {'lat': 55.3, 'lon': -3.4}, 'PT': {'lat': 39.3, 'lon': -8.2},
-    'NL': {'lat': 52.1, 'lon': 5.2}, 'AU': {'lat': -25.2, 'lon': 133.7},
+    'NL': {'lat':  52.1, 'lon': 5.2}, 'AU': {'lat': -25.2, 'lon': 133.7},
     'JP': {'lat': 36.2, 'lon': 138.2}, 'CA': {'lat': 56.1, 'lon': -106.3},
     'AR': {'lat': -38.4, 'lon': -63.6}, 'MX': {'lat': 23.6, 'lon': -102.5},
     'CL': {'lat': -35.6, 'lon': -71.5}, 'BE': {'lat': 50.5, 'lon': 4.4},
@@ -1727,7 +1652,6 @@ region_bubble_chart = dcc.Graph(
         'overflow': 'hidden'},
     figure=create_region_bubble_chart(df)
 )
-
 
 
 '''
@@ -2192,13 +2116,11 @@ def update_pilot_search_options(search_value, current_selected_pilot, region_fil
     if not region_filter: region_filter = 'ALL'
     if not country_filter: country_filter = 'ALL'
 
-    # --- MODIFICACIÓN: Usamos el nuevo DataFrame df_current_discipline ---
     filtered_df = df_current_discipline
     if region_filter != 'ALL':
         filtered_df = filtered_df[filtered_df['REGION'] == region_filter]
     if country_filter != 'ALL':
         filtered_df = filtered_df[filtered_df['LOCATION'] == country_filter]
-    # --- FIN DE LA MODIFICACIÓN ---
 
     # 2. La búsqueda de coincidencias no cambia
     matches = filtered_df[filtered_df['DRIVER'].str.contains(search_value, case=False)]
