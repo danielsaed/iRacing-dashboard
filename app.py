@@ -8,6 +8,49 @@ import pycountry_convert as pc
 import pycountry
 import gunicorn
 
+iracing_ragions = {
+    'US':['US'],
+    'Mexico':['MX'],
+    'Brazil':['BR'],
+    'Canada':['CA'],
+    'Atlantic':['GL'],
+    'Japan':['JP'],
+    'South America':['AR','PE','UY','CL','PY','BO','EC','CO','VE','GY','PA','CR','NI','HN','GT','BZ','SV','JM','DO','BS'],
+    'Iberia':['ES','PT','AD'],
+    'International':['RU','IL'],
+    'France':['FR'],
+    'UK & I':['GB','IE'], # <-- CORREGIDO: ' IE' -> 'IE' y nombre
+    'Africa':['ZA','BW','ZW','ZM','CD','GA','BI','RW','UG','KE','SO','MG','SZ','NG','GH','CI','BF','NE','GW','GM','SN','MR','EH','MA','DZ','LY','TN','EG','DJ'],
+    'Italy':['IT'],
+    'Central EU':['PL','CZ','SK','HU','SI','HR','RS','ME','AL','RO','MD','UA','BY','EE','LV','LT'],
+    'Finland':['FI'],
+    'DE-AT-CH':['CH','AT','DE'], # <-- CORRECCIÓN: Eliminado el ''
+    'Scandinavia':['DK','SE','NO'],
+    'Australia & NZ':['AU','NZ'],
+    'Asia':['SA','JO','IQ','YE','OM','AE','QA','IN','PK','AF','NP','BD','MM','TH','KH','VN','MY','ID','CN','PH','KR','MN','KZ','KG','UZ','TJ','AF','TM','LK'],
+    'Benelux':['NL','BE','LU']
+}
+
+def load_and_process_data(filename):
+    """Función para cargar y pre-procesar un archivo de disciplina."""
+    print(f"Loading and processing {filename}...")
+    df = pd.read_csv(filename)
+    '''filename_parquet = filename.replace('.csv', '.parquet')
+    df = pd.read_parquet(filename_parquet)'''
+    df = df[df['IRATING'] > 1]
+    df = df[df['STARTS'] > 1]
+    df = df[df['CLASS'].str.contains('D|C|B|A|P|R', na=False)]
+
+    country_to_region_map = {country: region for region, countries in iracing_ragions.items() for country in countries}
+    df['REGION'] = df['LOCATION'].map(country_to_region_map).fillna('International')
+    
+    df['Rank World'] = df['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
+    df['Rank Region'] = df.groupby('REGION')['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
+    df['Rank Country'] = df.groupby('LOCATION')['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
+    
+    df['CLASS'] = df['CLASS'].str[0]
+    print(f"Finished processing {filename}.")
+    return df
 
 def create_irating_trend_line_chart(df):
     """
@@ -631,6 +674,14 @@ def flag_img(code):
 
 GLOBAL_FONT = {'family': "Lato, sans-serif"}
 
+DISCIPLINE_DATAFRAMES = {
+    'ROAD.csv': load_and_process_data('ROAD.csv'),
+    'FORMULA.csv': load_and_process_data('FORMULA.csv'),
+    'OVAL.csv': load_and_process_data('OVAL.csv'),
+    'DROAD.csv': load_and_process_data('DROAD.csv'),
+    'DOVAL.csv': load_and_process_data('DOVAL.csv')
+}
+
 country_coords = {
     'ES': {'lat': 40.4, 'lon': -3.7}, 'US': {'lat': 39.8, 'lon': -98.5},
     'BR': {'lat': -14.2, 'lon': -51.9}, 'DE': {'lat': 51.1, 'lon': 10.4},
@@ -646,31 +697,10 @@ country_coords = {
     'AT': {'lat': 47.5, 'lon': 14.5}, 'PL': {'lat': 51.9, 'lon': 19.1},
 }
 
-iracing_ragions = {
-    'US':['US'],
-    'Mexico':['MX'],
-    'Brazil':['BR'],
-    'Canada':['CA'],
-    'Atlantic':['GL'],
-    'Japan':['JP'],
-    'South America':['AR','PE','UY','CL','PY','BO','EC','CO','VE','GY','PA','CR','NI','HN','GT','BZ','SV','JM','DO','BS'],
-    'Iberia':['ES','PT','AD'],
-    'International':['RU','IL'],
-    'France':['FR'],
-    'UK & I':['GB','IE'], # <-- CORREGIDO: ' IE' -> 'IE' y nombre
-    'Africa':['ZA','BW','ZW','ZM','CD','GA','BI','RW','UG','KE','SO','MG','SZ','NG','GH','CI','BF','NE','GW','GM','SN','MR','EH','MA','DZ','LY','TN','EG','DJ'],
-    'Italy':['IT'],
-    'Central EU':['PL','CZ','SK','HU','SI','HR','RS','ME','AL','RO','MD','UA','BY','EE','LV','LT'],
-    'Finland':['FI'],
-    'DE-AT-CH':['CH','AT','DE'], # <-- CORRECCIÓN: Eliminado el ''
-    'Scandinavia':['DK','SE','NO'],
-    'Australia & NZ':['AU','NZ'],
-    'Asia':['SA','JO','IQ','YE','OM','AE','QA','IN','PK','AF','NP','BD','MM','TH','KH','VN','MY','ID','CN','PH','KR','MN','KZ','KG','UZ','TJ','AF','TM','LK'],
-    'Benelux':['NL','BE','LU']
-}
+
 
 # --- 1. Carga y Preparación de Datos ---
-df = pd.read_csv('ROAD.csv')
+df = DISCIPLINE_DATAFRAMES['ROAD.csv']
 df = df[df['IRATING'] > 1]
 df = df[df['STARTS'] > 1]
 #df = df[df['STARTS'] < 2000]
@@ -1426,8 +1456,9 @@ def update_table_and_search(
     
     # --- 2. PROCESAMIENTO DE DATOS (se hace cada vez) ---
     # Leemos y procesamos el archivo seleccionado
-    df = pd.read_csv(filename)
-    df = df[df['IRATING'] > 1]
+    #df = pd.read_csv(filename)
+    df = DISCIPLINE_DATAFRAMES[active_discipline_filename]
+    '''df = df[df['IRATING'] > 1]
     df = df[df['STARTS'] > 1]
     df = df[df['CLASS'].str.contains('D|C|B|A|P|R', na=False)]
 
@@ -1438,7 +1469,7 @@ def update_table_and_search(
     df['Rank Region'] = df.groupby('REGION')['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
     df['Rank Country'] = df.groupby('LOCATION')['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
     
-    df['CLASS'] = df['CLASS'].str[0]
+    df['CLASS'] = df['CLASS'].str[0]'''
     df_for_graphs = df.copy() # Copia para gráficos que no deben ser filtrados
 
     # --- 3. LÓGICA DE FILTRADO Y VISUALIZACIÓN (sin cambios) ---
