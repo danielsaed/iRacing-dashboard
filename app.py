@@ -1,14 +1,3 @@
-#What is what i want to see on the dashboard
-
-#better what is what i want to know with this data
-
-#1 where % in the top world, region or country i am
-#2 who are the top iracers on world, region , country
-# comparations of countrys (players, level)
-#comparations of regions (player levels)
-#Top 20 of 
-
-
 import dash
 from dash import html, dcc, dash_table, Input, Output, State
 import plotly.express as px
@@ -17,6 +6,7 @@ import numpy as np
 import plotly.graph_objects as go
 import pycountry_convert as pc
 import pycountry
+import gunicorn
 
 
 def create_irating_trend_line_chart(df):
@@ -903,9 +893,9 @@ region_bubble_chart = dcc.Graph(
     figure=create_region_bubble_chart(df)
 )
 
-
 # --- 3. Inicialización de la App ---
 app = dash.Dash(__name__)
+server = app.server # <-- AÑADE ESTA LÍNEA
 
 # Layout principal
 app.layout = html.Div(
