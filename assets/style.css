@@ -78,7 +78,7 @@ p {
 }
 
 label {
-    font-size: clamp(11px, 0.8vw, 15px) !important;
+    font-size: clamp(11px, 0.8vw, 12px) !important;
 }
 
 /* --- REGLA ESPECÍFICA PARA LA COLUMNA REGION --- */
@@ -153,7 +153,7 @@ body {
 
 /* 1. Color del texto del placeholder (ej: "Buscar Piloto...") */
 .iracing-dropdown .Select-placeholder {
-  color: rgba(255, 255, 255, 0.6) !important;
+  color: rgba(255, 255, 255, 1) !important;
 }
 
 /* 2. Color del texto que se escribe en el buscador */
@@ -164,4 +164,49 @@ body {
 /* 3. Color del texto del piloto una vez que ha sido seleccionado */
 .iracing-dropdown .Select-value-label {
   color: white !important;
+}
+
+#competitiveness-tables-container .dash-spreadsheet-inner::-webkit-scrollbar-thumb:hover {
+  background-color: #6c6c6c; /* Se aclara para dar feedback visual */
+}
+
+/* --- ESTILOS PARA LA PAGINACIÓN DARK MODE DE LAS TABLAS TOP --- */
+
+/* Contenedor principal de la paginación */
+#competitiveness-tables-container .pagination {
+  justify-content: center; /* Centra los botones de página */
+  margin-top: 5px;
+  margin-bottom: 0;
+}
+
+/* Estilo general para cada botón de paginación */
+#competitiveness-tables-container .page-item .page-link {
+  background-color: rgba(11,11,19,1); /* Fondo oscuro como las celdas */
+  color: rgb(255, 255, 255, .8);      /* Texto claro */
+  border: 1px solid #4A4A4A;          /* Borde sutil */
+  font-size: 12px;                    /* Texto más pequeño */
+  padding: 4px 10px;                  /* Padding reducido para hacerlo más compacto */
+  margin: 0 2px;                      /* Espacio entre botones */
+  border-radius: 4px;                 /* Bordes ligeramente redondeados */
+}
+
+/* Estilo para los botones al pasar el ratón por encima (excepto el activo) */
+#competitiveness-tables-container .page-item:not(.active) .page-link:hover {
+  background-color: #323232; /* Un gris un poco más claro */
+  color: white;
+}
+
+/* Estilo para el botón de la página activa */
+#competitiveness-tables-container .page-item.active .page-link {
+  background-color: rgba(0, 111, 255, 0.5); /* Color de acento azul */
+  border-color: rgb(0, 111, 255);
+  color: white;
+  font-weight: bold;
+}
+
+/* Estilo para los botones deshabilitados (ej. "Previous" en la primera página) */
+#competitiveness-tables-container .page-item.disabled .page-link {
+  background-color: rgba(11,11,19,1);
+  color: #4A4A4A; /* Color de texto muy atenuado */
+  border-color: #323232;
 }
