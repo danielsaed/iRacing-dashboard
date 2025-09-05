@@ -7,6 +7,10 @@ import plotly.graph_objects as go
 import pycountry_convert as pc
 import pycountry
 import gunicorn
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+import atexit
+from datetime import datetime  # AÑADIR ESTA IMPORTACIÓN
 
 iracing_ragions = {
     'US':['US'],
@@ -31,6 +35,7 @@ iracing_ragions = {
     'Benelux':['NL','BE','LU']
 }
 
+
 def load_and_process_data(filename):
     """Función para cargar y pre-procesar un archivo de disciplina."""
     print(f"Loading and processing {filename}...")
@@ -51,6 +56,56 @@ def load_and_process_data(filename):
     df['CLASS'] = df['CLASS'].str[0]
     print(f"Finished processing {filename}.")
     return df
+
+def update_all_data():
+    """Actualiza todos los archivos de datos"""
+    print(f"\n{'='*60}")
+    print(f"🔄 SCHEDULED DATA UPDATE STARTED")
+    print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"{'='*60}")
+    
+    files_to_update = ['ROAD.csv', 'FORMULA.csv', 'OVAL.csv', 'DROAD.csv', 'DOVAL.csv']
+    
+    for filename in files_to_update:
+        try:
+            print(f"🔄 Updating {filename}...")
+            new_data = load_and_process_data(filename)
+            DISCIPLINE_DATAFRAMES[filename] = new_data
+            print(f"✅ {filename} updated successfully! ({len(new_data)} records)")
+        except Exception as e:
+            print(f"❌ Error updating {filename}: {str(e)}")
+    
+    print(f"🎉 SCHEDULED DATA UPDATE COMPLETED")
+    print(f"{'='*60}\n")
+
+# CARGA INICIAL
+DISCIPLINE_DATAFRAMES = {
+    'ROAD.csv': load_and_process_data('data/ROAD.csv'),
+    'FORMULA.csv': load_and_process_data('data/FORMULA.csv'),
+    'OVAL.csv': load_and_process_data('data/OVAL.csv'),
+    'DROAD.csv': load_and_process_data('data/DROAD.csv'),
+    'DOVAL.csv': load_and_process_data('data/DOVAL.csv')
+}
+
+# CONFIGURAR EL SCHEDULER
+scheduler = BackgroundScheduler()
+scheduler.add_job(
+    func=update_all_data,
+    trigger=IntervalTrigger(hours=2),  # Ejecutar cada 2 horas
+    id='data_update_job',
+    name='Update iRacing Data',
+    replace_existing=True
+)
+
+# INICIAR EL SCHEDULER
+scheduler.start()
+print("🚀 Automatic data updater started with APScheduler!")
+print("📅 Updates scheduled every 2 hours")
+
+# ASEGURAR QUE EL SCHEDULER SE CIERRE AL CERRAR LA APP
+atexit.register(lambda: scheduler.shutdown())
+
+
 
 def create_irating_trend_line_chart(df):
     """
@@ -270,9 +325,9 @@ def create_kpi_global(filtered_df, filter_context="World"):
     fig = go.Figure()
     kpis = [
         {'value': total_pilots, 'title': f"Drivers {filter_context}", 'format': ',.0f'},
-        {'value': avg_irating, 'title': "Average iRating", 'format': ',.0f'},
-        {'value': avg_starts, 'title': "Average Starts", 'format': '.1f'},
-        {'value': avg_wins, 'title': "Average Wins", 'format': '.2f'}
+        {'value': avg_irating, 'title': "Avg iRating", 'format': ',.0f'},
+        {'value': avg_starts, 'title': "Avg Starts", 'format': '.1f'},
+        {'value': avg_wins, 'title': "Avg Wins", 'format': '.2f'}
     ]
     for i, kpi in enumerate(kpis):
         fig.add_trace(go.Indicator(
@@ -287,7 +342,7 @@ def create_kpi_global(filtered_df, filter_context="World"):
         grid={'rows': 1, 'columns': 4, 'pattern': "independent"},
         template='plotly_dark',
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='#323232',
+        plot_bgcolor="#BD1818",
         margin=dict(l=20, r=20, t=50, b=10),
         height=60,
         font=GLOBAL_FONT
@@ -306,7 +361,7 @@ def create_kpi_pilot(filtered_df, pilot_info=None, filter_context="World"):
             plot_bgcolor='rgba(0,0,0,0)',
             xaxis_visible=False,
             yaxis_visible=False,
-            height=50,
+            height=240,  # Aumentamos la altura considerablemente
             annotations=[
                 dict(
                     text="<b>Select or search a driver</b>",
@@ -323,7 +378,6 @@ def create_kpi_pilot(filtered_df, pilot_info=None, filter_context="World"):
             ]
         )
         return fig
-    # --- FIN DE LA
 
     # Si SÍ hay información del piloto, procedemos como antes.
     pilot_name = pilot_info.get('DRIVER', 'Piloto')
@@ -340,32 +394,42 @@ def create_kpi_pilot(filtered_df, pilot_info=None, filter_context="World"):
     
     kpis_piloto = [
         {'rank': rank_world, 'percentil': percentil_world, 'title': "World Rank"},
-        {'rank': rank_region, 'percentil': percentil_region, 'title': "Region Rank "},
+        {'rank': rank_region, 'percentil': percentil_region, 'title': "Region Rank"},
         {'rank': rank_country, 'percentil': percentil_country, 'title': "Country Rank"}
     ]
 
+    # Layout vertical con más espacio
     for i, kpi in enumerate(kpis_piloto):
         fig.add_trace(go.Indicator(
             mode="number",
             value=kpi['rank'],
-            number={'prefix': "#", 'font': {'size': 12}},
-            # Eliminamos el <br> y ajustamos el texto para que esté en una línea
-            title={"text": f"{kpi['title']} <span style='font-size:12px;color:gray'>(Top {100-kpi['percentil']:.2f}%)</span>", 'font': {'size': 12}},
-            domain={'row': 0, 'column': i}
+            number={'prefix': "#", 'font': {'size': 18}},  # Número más grande
+            title={
+                "text": f"<b>{kpi['title']}</b><span style='font-size:11px;color:gray'>(Top {100-kpi['percentil']:.1f}%)</span>", 
+                'font': {'size': 12}  # Título más grande
+            },
+            domain={
+                'row': i, 
+                'column': 0,
+                # AGREGAMOS ESPACIADO ESPECÍFICO PARA CADA KPI
+                'y': [0.75 - i*0.32, 0.95 - i*0.32]  # Da más espacio vertical a cada KPI
+            }
         ))
+    
     fig.update_layout(
         title={
             'text': title_text,
-            'y':0.95, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top',
-            'font': {'size': 14}
+            'y': 0.98, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top',
+            'font': {'size': 28}
         },
-        grid={'rows': 1, 'columns': 3, 'pattern': "independent"},
+        # CAMBIO: Eliminamos el grid automático y usamos dominios manuales
         template='plotly_dark',
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=20, r=20, t=40, b=10),
-        height=60,
-        font=GLOBAL_FONT
+        margin=dict(l=20, r=20, t=35, b=15),  # Más margen arriba y abajo
+        height=240,  # Altura aumentada considerablemente
+        font=GLOBAL_FONT,
+        showlegend=False
     )
     return fig
 
@@ -674,14 +738,6 @@ def flag_img(code):
 
 GLOBAL_FONT = {'family': "Lato, sans-serif"}
 
-DISCIPLINE_DATAFRAMES = {
-    'ROAD.csv': load_and_process_data('ROAD.csv'),
-    'FORMULA.csv': load_and_process_data('FORMULA.csv'),
-    'OVAL.csv': load_and_process_data('OVAL.csv'),
-    'DROAD.csv': load_and_process_data('DROAD.csv'),
-    'DOVAL.csv': load_and_process_data('DOVAL.csv')
-}
-
 country_coords = {
     'ES': {'lat': 40.4, 'lon': -3.7}, 'US': {'lat': 39.8, 'lon': -98.5},
     'BR': {'lat': -14.2, 'lon': -51.9}, 'DE': {'lat': 51.1, 'lon': 10.4},
@@ -786,49 +842,51 @@ interactive_table = dash_table.DataTable(
     sort_mode="single",
     page_action="custom",
     page_current=0,
-    page_size=20,
-    page_count=len(df_table) // 20 + (1 if len(df_table) % 20 > 0 else 0),
+    page_size=100,  # CAMBIO: De 20 a 100 elementos por página
+    page_count=len(df_table) // 100 + (1 if len(df_table) % 100 > 0 else 0),  # CAMBIO: Actualizar cálculo
     virtualization=False,
     style_as_list_view=True,
     active_cell={'row': 21,'column':1},
     
-    
-    # --- ELIMINAMOS selected_rows Y AÑADIMOS active_cell ---
-    # selected_rows=[],  # <-- ELIMINAR ESTA LÍNEA
-    
     style_table={
-        #'tableLayout': 'fixed', # <-- DESCOMENTA O AÑADE ESTA LÍNEA
         'overflowX': 'auto',
-        'height': '70vh',
-        'minHeight': '0',
+        'overflowY': 'auto',  # SCROLL VERTICAL habilitado
+        'height': '100%',     # CAMBIO: Usar 100% del contenedor padre
+        'maxHeight': '100%',  # CAMBIO: Usar 100% del contenedor padre
+        'minHeight': '700px', # CAMBIO: Altura mínima aumentada
         'width': '100%',
         'borderRadius': '15px',
         'overflow': 'hidden',
         'backgroundColor': 'rgba(11,11,19,1)',
-        'textOverflow': 'ellipsis',
         'border': '1px solid #4A4A4A'
-        
     },
     
     style_cell={
         'textAlign': 'center',
-        'padding': '1px',
+        'padding': '6px 3px',  # CAMBIO: Padding más compacto para aprovechar espacio
         'backgroundColor': 'rgba(11,11,19,1)',
         'color': 'rgb(255, 255, 255,.8)',
-        'border': '1px solid rgba(255, 255, 255, 0)',
+        'border': '1px solid rgba(255, 255, 255, 0.1)',
         'overflow': 'hidden',
         'textOverflow': 'ellipsis',
-        'whiteSpace': 'nowrap', # <-- AÑADE ESTA LÍNEA
-        'maxWidth': 0
+        'whiteSpace': 'nowrap',
+        'maxWidth': 0,
+        'fontSize': '11px'  # CAMBIO: Fuente ligeramente más pequeña para más filas
     },
+    
     style_header={
         'backgroundColor': 'rgba(30,30,38,1)',
         'fontWeight': 'bold',
         'color': 'white',
-        'border': 'none',
+        'border': '1px solid rgba(255, 255, 255, 0.2)',
         'textAlign': 'center',
-        'fontSize': 10
+        'fontSize': '12px',
+        'position': 'sticky',  # Header pegajoso
+        'top': 0,              # Se queda arriba al hacer scroll
+        'zIndex': 10,          # Prioridad visual
+        'padding': '6px 3px'   # CAMBIO: Padding más compacto
     },
+    
     # --- AÑADIMOS ESTILO PARA LA FILA SELECCIONADA Y LAS CLASES ---
     style_data_conditional=[
         {
@@ -927,171 +985,505 @@ region_bubble_chart = dcc.Graph(
 app = dash.Dash(__name__)
 server = app.server # <-- AÑADE ESTA LÍNEA
 
-# Layout principal
+# Layout principal MODIFICADO
 app.layout = html.Div(
-    #style={'height': '100vh', 'display': 'flex', 'flexDirection': 'column', 'backgroundColor': '#1E1E1E'},
-    style={},
+    style={
+        'margin': '0',
+        'padding': '0',
+        'backgroundColor': 'rgba(5,5,15,255)',
+        'color': '#ffffff',
+        'fontFamily': 'Lato, sans-serif',
+        'minHeight': '100vh'
+    },
     children=[
-        
-        
-        # --- CONTENEDOR PRINCIPAL CON 3 COLUMNAS ---
+        # CONTENEDOR PRINCIPAL CENTRADO
         html.Div(
-            id='main-content-container',
-            #style={'display': 'flex', 'flex': 1, 'minHeight': 0, 'padding': '0 10px 10px 10px'},
-            style={'display': 'flex', 'padding': '0px 10px 10px 10px'},
+            style={
+                'maxWidth': '1400px',
+                'margin': '0 auto',
+                'padding': '20px 5vw',
+                'minHeight': '100vh',
+                'display': 'flex',
+                'flexDirection': 'column',
+                'gap': '30px'
+            },
             children=[
                 
-                # --- COLUMNA IZQUIERDA (FILTROS Y TABLA) ---
+                # 1. SECCIÓN HEADER - Título y Botones
                 html.Div(
-                    id='left-column',
-                    style={'width': '25%', 'padding': '1%', 'display': 'flex', 'flexDirection': 'column'},
+                    style={
+                        'textAlign': 'center',
+                        'marginBottom': '20px'
+                    },
                     children=[
-                        # Contenedor de Filtros
-                        html.Div(
-                            style={'display': 'flex', 'width': '60%', 'justifyContent': 'space-between', 'margin': '0 auto 10px auto'},
-                            children=[
-                                # --- MODIFICACIÓN: Centramos el texto del contenedor del filtro de Región ---
-                                html.Div([
-                                    html.Label("Region:", style={'color': 'white', 'fontSize': 2}),
-                                    dcc.Dropdown(
-                                        id='region-filter',
-                                        options=[{'label': 'All', 'value': 'ALL'}] + 
-                                               [{'label': region, 'value': region} for region in sorted(iracing_ragions.keys())],
-                                        value='ALL',
-                                        className='iracing-dropdown',
-                                        # --- AÑADIMOS ESTILO INICIAL ---
-
-                                    )
-                                ], style={'flex': 1, 'marginRight': '10px', 'textAlign': 'center'}),
-
-                                # --- MODIFICACIÓN: Centramos el texto del contenedor del filtro de País ---
-                                html.Div([
-                                    html.Label("Country:", style={'color': 'white', 'fontSize': 10}),
-                                    dcc.Dropdown(
-                                        id='country-filter',
-                                        options=[{'label': 'All', 'value': 'ALL'}],
-                                        value='ALL',
-                                        className='iracing-dropdown',
-                                        # --- AÑADIMOS ESTILO INICIAL ---
-
-                                    )
-                                ], style={'flex': 1, 'marginRight': '10px', 'textAlign': 'center'}),
-
-                                
-                            ]
-                        ),
-                        # Contenedor de la Tabla
-                        html.Div(
-                            [
-                                html.Label("Search Driver:", style={'color': 'white', 'fontSize': 10}),
-                                dcc.Dropdown(
-                                    id='pilot-search-dropdown',
-                                    options=[],
-                                    placeholder='Search Driver...',
-                                    className='iracing-dropdown',
-                                    searchable=True,
-                                    clearable=True,
-                                    search_value='',
-                                    # Se elimina el estilo de aquí para aplicarlo al contenedor.
-                                )
-                            ],
-                            # --- MODIFICACIÓN: Centramos el texto del contenedor de búsqueda ---
-                            style={'width': '60%', 'marginBottom': '10px', 'margin': '0 auto 10px auto', 'color':'white', 'textAlign': 'center'}
-                        ),
-                        
-                        html.Div(
-                            kpi_pilot, 
+                        html.H1(
+                            "🏁 Top iRating Dashboard", 
                             style={
-                                'marginTop': '1%',
-                                'marginBottom': '1%'       # Pone los KPIs por delante del mapa
+                                'fontSize': 'clamp(36px, 5vw, 48px)',
+                                'color': 'white',
+                                'margin': '0 0 20px 0',
+                                'fontWeight': '900'
                             }
                         ),
-                        html.Div(interactive_table, style={'flex': 1})
+                        html.Div(
+                            style={
+                                'display': 'flex',
+                                'justifyContent': 'center',
+                                'gap': '10px',
+                                'flexWrap': 'wrap'
+                            },
+                            children=[
+                                html.Button('Sports Car', id='btn-road', n_clicks=0, className='dashboard-type-button'),
+                                html.Button('Formula', id='btn-formula', n_clicks=0, className='dashboard-type-button'),
+                                html.Button('Oval', id='btn-oval', n_clicks=0, className='dashboard-type-button'),
+                                html.Button('Dirt Road', id='btn-dirt-road', n_clicks=0, className='dashboard-type-button'),
+                                html.Button('Dirt Oval', id='btn-dirt-oval', n_clicks=0, className='dashboard-type-button'),
+                            ]
+                        )
                     ]
                 ),
                 
-                # --- COLUMNA CENTRAL ---
+                # 2. SECCIÓN MAPA Y KPIs GLOBALES - Solo KPIs globales superpuestos
                 html.Div(
-                    id='middle-column',
-                    # --- MODIFICACIÓN: Añadimos position: 'relative' ---
-                    # Esto convierte a la columna en el contenedor de referencia para el posicionamiento absoluto.
-                    style={'width': '45%', 'padding': '1%', 'display': 'flex', 'flexDirection': 'column', 'position': 'relative'},
-                    children=[                
+                    style={
+                        'position': 'relative',
+                        'top': '0px',
+                        'backgroundColor': 'transparent',  # Fondo transparente
+                        'borderRadius': '0px',             # Sin bordes redondeados
+                        'border': '0px solid #4A4A4A',
+                        'padding': '20px',
+                        'overflow': 'hidden'
+                    },
+                    children=[
+                        # Solo KPIs globales superpuestos
                         html.Div(
-                            style={'textAlign': 'center'},
+                            style={
+                                'position': 'absolute',
+                                'top': '0px',
+                                'left': '50%',
+                                'transform': 'translateX(-50%)',
+                                'width': '80%',
+                                'maxWidth': '800px',
+                                'zIndex': '10',
+                                'backgroundColor': 'rgba(11,11,19,0)',
+                                'borderRadius': '10px',
+                                'border': '0px solid #4A4A4A',
+                                'padding': '10px'
+                            },
                             children=[
-                                html.H1("Top iRating", style={'fontSize': 48, 'color': 'white', 'margin': '-10px 0 10px 0'}),
-                                html.Div([
-                                    # <-- AÑADIDO
-                                    html.Button('Sports Car', id='btn-road', n_clicks=0, className='dashboard-type-button'),
-                                    html.Button('Formula', id='btn-formula', n_clicks=0, className='dashboard-type-button'),
-                                    html.Button('Oval', id='btn-oval', n_clicks=0, className='dashboard-type-button'),
-                                    html.Button('Dirt Road', id='btn-dirt-road', n_clicks=0, className='dashboard-type-button'),
-                                    html.Button('Dirt Oval', id='btn-dirt-oval', n_clicks=0, className='dashboard-type-button'),
-                                ], style={'display': 'flex', 'justifyContent': 'center', 'gap': '10px'})
+                                dcc.Graph(id='kpi-global', style={'height': '50px', 'margin': '0'})
                             ]
                         ),
-        
-                        html.Div(
-                            kpi_global, 
-                            style={
-                                
-                                'width': '70%',
-                                'margin': '0 auto',
-                                'position': 'relative', # Necesario para que z-index funcione
-                                'z-index': '10'         # Pone los KPIs por delante del mapa
-                            }
-                        ),
-                        html.Div(
-                            continent_map, 
-                            style={
-                                'flex': 1, 
-                                'minHeight': 0,
-                                'marginTop': '-5%'
-                            }
-                        ),
-                        # --- MODIFICACIÓN: Se elimina el posicionamiento absoluto ---
-                        # El histograma ahora está en el flujo normal de la página.
-                        html.Div(
-                            histogram_irating, 
-                            style={
-                                'width':'100%',
-                                'height': '26vh',       # Mantenemos una altura definida
-                                'marginTop': '1%'       # Añadimos un margen superior para separarlo del mapa
-                            }
-                        ),
-                        
-                    ]
-                ),
-                
-                # --- COLUMNA DERECHA ---
-                html.Div(
-                    id='right-column',
-                    style={'width': '25%', 'padding': '1%', 'display': 'flex', 'flexDirection': 'column'},
-                    children=[
-                        
-                        # --- MODIFICACIÓN: Contenedor vacío para las tablas de competitividad ---
-                        html.Div(id='competitiveness-tables-container'),
-                        
-                        # --- MODIFICACIÓN: Gráfico de burbujas vacío ---
+                        # Mapa de fondo
                         dcc.Graph(
-                            id='region-bubble-chart',
-                            style={'height': '32vh', 'marginTop': '3.5%','borderRadius': '10px','border': '1px solid #4A4A4A', 'overflow': 'hidden'}
-                        ),
-                        
-                        # --- MODIFICACIÓN: Gráfico de líneas vacío ---
-                        dcc.Graph(
-                            id='irating-starts-scatter',
-                            style={'height': '32vh', 'marginTop': '7.4%', 'borderRadius': '10px', 'border': '1px solid #4A4A4A', 'overflow': 'hidden'},
+                            id='continent-map',
+                            
+                            style={'height': '650px',
+                                   'backgroundColor': 'transparent', 
+                                    'margin': '0'},
                             config={'displayModeBar': False}
+                        )
+                    ]
+                ),
+                
+                # 3. SECCIÓN FILTROS Y TABLA - Lado a lado CON KPIs DEL PILOTO
+                html.Div(
+                    style={
+                        'display': 'flex',
+                        'gap': '20px',
+                        'flexWrap': 'wrap'
+                        
+                    },
+                    children=[
+                        # Contenedor de Filtros CON KPIs DEL PILOTO
+                        html.Div(
+                            style={
+                                'flex': '1',
+                                'minWidth': '300px',
+                                'maxWidth': '600px',
+                                'backgroundColor': 'rgba(18,18,26,.5)',
+                                'borderRadius': '15px',
+                                'border': '1px solid #4A4A4A',
+                                'padding': '20px'
+                            },
+                            children=[
+                                html.H3(
+                                    "Filters", 
+                                    style={
+                                        'color': 'white',
+                                        'textAlign': 'center',
+                                        'marginBottom': '20px',
+                                        'fontWeight': '700'
+                                    }
+                                ),
+                                
+                                # Filtros de región y país
+                                html.Div(
+                                    style={
+                                        'display': 'flex',
+                                        'gap': '15px',
+                                        'marginBottom': '20px',
+                                        'flexDirection': 'column'
+                                    },
+                                    children=[
+                                        html.Div([
+
+                                            html.Label(
+                                                "Region:", 
+                                                style={
+                                                    'color': 'white',
+                                                    'fontSize': '14px',
+                                                    'marginBottom': '5px',
+                                                    'display': 'block',
+                                                    'textAlign': 'center'
+                                                }
+                                            ),
+                                            dcc.Dropdown(
+                                                id='region-filter',
+                                                options=[{'label': 'All', 'value': 'ALL'}] + 
+                                                       [{'label': region, 'value': region} for region in sorted(iracing_ragions.keys())],
+                                                value='ALL',
+                                                className='iracing-dropdown'
+                                            )
+                                        ]),
+                                        
+                                        html.Div([
+                                            html.Label(
+                                                "Country:", 
+                                                style={
+                                                    'color': 'white',
+                                                    'fontSize': '14px',
+                                                    'marginBottom': '5px',
+                                                    'display': 'block',
+                                                    'textAlign': 'center'
+                                                }
+                                            ),
+                                            dcc.Dropdown(
+                                                id='country-filter',
+                                                options=[{'label': 'All', 'value': 'ALL'}],
+                                                value='ALL',
+                                                className='iracing-dropdown'
+                                            )
+                                        ])
+                                    ]
+                                ),
+                                
+                                # Búsqueda de piloto
+                                html.Div([
+                                    html.Label(
+                                        "Search Driver:", 
+                                        style={
+                                            'color': 'white',
+                                            'fontSize': '14px',
+                                            'marginBottom': '5px',
+                                            'display': 'block',
+                                            'textAlign': 'center'
+                                        }
+                                    ),
+                                    dcc.Dropdown(
+                                        id='pilot-search-dropdown',
+                                        options=[],
+                                        placeholder='Search Driver...',
+                                        className='iracing-dropdown',
+                                        searchable=True,
+                                        clearable=True,
+                                        search_value=''
+                                    )
+                                ]),
+                                
+                                # NUEVA SECCIÓN: KPIs del piloto debajo de los filtros
+                                html.Div(
+                                    style={
+                                        'marginTop': '30px',
+                                        'padding': '15px',
+                                        'backgroundColor': 'rgba(11,11,19,0.8)',
+                                        'borderRadius': '10px',
+                                        'border': '1px solid #4A4A4A'
+                                    },
+                                    children=[
+                                        html.H4(
+                                            "Selected Driver", 
+                                            style={
+                                                'color': 'white',
+                                                'textAlign': 'center',
+                                                'marginBottom': '15px',
+                                                'fontSize': '16px',
+                                                'fontWeight': '700'
+                                            }
+                                        ), 
+                                        dcc.Graph(
+                                            id='kpi-pilot', 
+                                            style={
+                                                'height': '260px',  # Aumentamos altura del contenedor
+                                                'margin': '0'
+                                            }
+                                        )
+                                    ]
+                                )
+                            ]
+                        ),
+                        
+                        # Contenedor de Tabla MODIFICADO
+                        html.Div(
+                            style={
+                                'flex': '2',
+                                'minWidth': '300px',
+                                'backgroundColor': 'rgba(18,18,26,.5)',
+                                'borderRadius': '15px',
+                                'border': '1px solid #4A4A4A',
+                                'padding': '20px',
+                                'display': 'flex',          # CAMBIO: Usar flexbox
+                                'flexDirection': 'column',  # CAMBIO: Dirección vertical
+                                'height': '1000px'          # CAMBIO: Altura fija del contenedor
+                            },
+                            children=[
+                                html.H3(
+                                    "Rankings", 
+                                    style={
+                                        'color': 'white',
+                                        'textAlign': 'center',
+                                        'marginBottom': '20px',
+                                        'fontWeight': '700',
+                                        'flexShrink': 0  # CAMBIO: No se encoge
+                                    }
+                                ),
+                                # Contenedor específico para la tabla
+                                html.Div(
+                                    style={
+                                        'flex': '1',           # CAMBIO: Ocupa todo el espacio restante
+                                        'display': 'flex',
+                                        'flexDirection': 'column',
+                                        'minHeight': 0         # CAMBIO: Permite que se encoja si es necesario
+                                    },
+                                    children=[
+                                        dash_table.DataTable(
+                                            id='datatable-interactiva',
+                                            data=[],
+                                            sort_action="custom",
+                                            sort_mode="single",
+                                            page_action="custom",
+                                            page_current=0,
+                                            page_size=100,  # CAMBIO: 100 elementos por página
+                                            page_count=len(df_table) // 100 + (1 if len(df_table) % 100 > 0 else 0),
+                                            virtualization=False,
+                                            style_as_list_view=True,
+                                            active_cell={'row': 101,'column':1},
+                                            
+                                            style_table={
+                                                'overflowX': 'auto',
+                                                'overflowY': 'auto',
+                                                'height': '100%',     # CAMBIO: Usa todo el espacio del contenedor padre
+                                                'maxHeight': '100%',  # CAMBIO: No limitar altura
+                                                'minHeight': '900px',
+                                                'width': '100%',
+                                                'borderRadius': '15px',
+                                                'overflow': 'hidden',
+                                                'backgroundColor': 'rgba(11,11,19,1)',
+                                                'border': '1px solid #4A4A4A'
+                                            },
+                                            
+                                            style_cell={
+                                                'textAlign': 'center',
+                                                'padding': '6px 3px',  # Padding más compacto
+                                                'backgroundColor': 'rgba(11,11,19,1)',
+                                                'color': 'rgb(255, 255, 255,.8)',
+                                                'border': '1px solid rgba(255, 255, 255, 0.1)',
+                                                'overflow': 'hidden',
+                                                'textOverflow': 'ellipsis',
+                                                'whiteSpace': 'nowrap',
+                                                'maxWidth': 0,
+                                                'fontSize': '11px'  # Fuente más compacta
+                                            },
+                                            
+                                            style_header={
+                                                'backgroundColor': 'rgba(30,30,38,1)',
+                                                'fontWeight': 'bold',
+                                                'color': 'white',
+                                                'border': '1px solid rgba(255, 255, 255, 0.2)',
+                                                'textAlign': 'center',
+                                                'fontSize': '12px',
+                                                'position': 'sticky',
+                                                'top': 0,
+                                                'zIndex': 10,
+                                                'padding': '6px 3px'
+                                            },
+                                            
+                                            # Mantén todos tus estilos existentes
+                                            style_data_conditional=[
+                                                {
+                                                    'if': {'state': 'active'},
+                                                    'backgroundColor': 'rgba(0, 111, 255, 0.3)',
+                                                    'border': '1px solid rgba(0, 111, 255)'
+                                                },
+                                                {
+                                                    'if': {'state': 'selected'},
+                                                    'backgroundColor': 'rgba(0, 111, 255, 0)',
+                                                    'border': '1px solid rgba(0, 111, 255,0)'
+                                                },
+                                                # --- REGLAS MEJORADAS CON BORDES REDONDEADOS ---
+                                                {'if': {'filter_query': '{CLASS} contains "P"','column_id': 'CLASS'}, 
+                                                 'backgroundColor': 'rgba(54,54,62,255)', 'color': 'rgba(166,167,171,255)', 'fontWeight': 'bold','border': '1px solid rgba(134,134,142,255)'},
+                                                
+                                                {'if': {'filter_query': '{CLASS} contains "A"','column_id': 'CLASS'}, 
+                                                 'backgroundColor': 'rgba(0,42,102,255)', 'color': 'rgba(107,163,238,255)', 'fontWeight': 'bold','border': '1px solid rgba(35,104,195,255)'},
+                                                
+                                                {'if': {'filter_query': '{CLASS} contains "B"','column_id': 'CLASS'}, 
+                                                 'backgroundColor': 'rgba(24,84,14,255)', 'color': 'rgba(139,224,105,255)', 'fontWeight': 'bold','border': '1px solid rgba(126,228,103,255)'},
+                                                
+                                                {'if': {'filter_query': '{CLASS} contains "C"','column_id': 'CLASS'}, 
+                                                 'backgroundColor': 'rgba(81,67,6,255)', 'color': 'rgba(224,204,109,255)', 'fontWeight': 'bold','border': '1px solid rgba(220,193,76,255)'},
+                                                
+                                                {'if': {'filter_query': '{CLASS} contains "D"','column_id': 'CLASS'}, 
+                                                 'backgroundColor': 'rgba(102,40,3,255)', 'color': 'rgba(255,165,105,255)', 'fontWeight': 'bold','border': '1px solid rgba(208,113,55,255)'},
+                                                
+                                                {'if': {'filter_query': '{CLASS} contains "R"','column_id': 'CLASS'}, 
+                                                 'backgroundColor': 'rgba(91,19,20,255)', 'color': 'rgba(225,125,123,255)', 'fontWeight': 'bold','border': '1px solid rgba(172,62,61,255)'},
+                                            ],
+                                            
+                                            style_cell_conditional=[
+                                                {'if': {'column_id': 'CLASS'},        'width': '5%', 'minWidth': '5%', 'maxWidth': '5%'},
+                                                {'if': {'column_id': 'Rank World'},   'width': '10%', 'minWidth': '10%', 'maxWidth': '10%'},
+                                                {'if': {'column_id': 'Rank Region'},  'width': '10%', 'minWidth': '10%', 'maxWidth': '10%'},
+                                                {'if': {'column_id': 'Rank Country'}, 'width': '10%', 'minWidth': '10%', 'maxWidth': '10%'},
+                                                {'if': {'column_id': 'DRIVER'},       'width': '30%', 'minWidth': '30%', 'maxWidth': '30%', 'textAlign': 'left'},
+                                                {'if': {'column_id': 'IRATING'},      'width': '10%', 'minWidth': '10%', 'maxWidth': '10%'},
+                                                {'if': {'column_id': 'LOCATION'},     'width': '10%', 'minWidth': '10%', 'maxWidth': '10%'},
+                                                {'if': {'column_id': 'WINS'},         'width': '5%', 'minWidth': '5%', 'maxWidth': '5%'},
+                                                {'if': {'column_id': 'STARTS'},       'width': '5%', 'minWidth': '5%', 'maxWidth': '5%'},
+                                                {'if': {'column_id': 'REGION'},       'width': '15%', 'minWidth': '15%', 'maxWidth': '15%'},
+                                            ]
+                                        )
+                                    ]
+                                )
+                            ]
+                        )
+                    ]
+                ),
+                
+                # 4. SECCIÓN HISTOGRAMA - Ancho completo (sin cambios)
+                html.Div(
+                    style={
+                        'backgroundColor': 'rgba(18,18,26,.5)',
+                        'borderRadius': '15px',
+                        'border': '1px solid #4A4A4A',
+                        'padding': '20px'
+                    },
+                    children=[
+                        html.H3(
+                            "iRating Distribution", 
+                            style={
+                                'color': 'white',
+                                'textAlign': 'center',
+                                'marginBottom': '20px',
+                                'fontWeight': '700'
+                            }
+                        ),
+                        dcc.Graph(
+                            id='histogram-plot',
+                            style={'height': '350px'},
+                            config={'displayModeBar': False}
+                        )
+                    ]
+                ),
+                
+                # 5. SECCIÓN GRÁFICOS ADICIONALES (sin cambios)
+                html.Div(
+                    style={
+                        'display': 'flex',
+                        'flexDirection': 'column',
+                        'gap': '20px'
+                    },
+                    children=[
+                        # Primera fila: Tabla de competitividad (sin cambios)
+                        html.Div(
+                            style={
+                                'backgroundColor': 'rgba(18,18,26,.5)',
+                                'borderRadius': '15px',
+                                'border': '1px solid #4A4A4A',
+                                'padding': '20px'
+                            },
+                            children=[
+                                html.H3(
+                                    "Top Competitive Regions & Countries", 
+                                    style={
+                                        'color': 'white',
+                                        'textAlign': 'center',
+                                        'marginBottom': '10px',
+                                        'fontWeight': '700'
+                                    }
+                                ),
+                                html.P(
+                                    "Based on average iRating of top 100 drivers per region/country (minimum 100 drivers required)",
+                                    style={
+                                        'color': '#CCCCCC',
+                                        'textAlign': 'center',
+                                        'marginBottom': '20px',
+                                        'fontSize': '12px',
+                                        'fontStyle': 'italic'
+                                    }
+                                ),
+                                html.Div(id='competitiveness-tables-container')
+                            ]
+                        ),
+                        
+                        # CAMBIO: Ahora los gráficos están en columna vertical
+                        # Primer gráfico: Regional Analysis
+                        html.Div(
+                            style={
+                                'backgroundColor': 'rgba(18,18,26,.5)',
+                                'borderRadius': '15px',
+                                'border': '1px solid #4A4A4A',
+                                'padding': '20px'
+                            },
+                            children=[
+                                html.H3(
+                                    "Regional Analysis", 
+                                    style={
+                                        'color': 'white',
+                                        'textAlign': 'center',
+                                        'marginBottom': '20px',
+                                        'fontWeight': '700'
+                                    }
+                                ),
+                                dcc.Graph(
+                                    id='region-bubble-chart',
+                                    style={'height': '400px'},  # Aumentamos altura ya que ahora ocupa todo el ancho
+                                    config={'displayModeBar': False}
+                                )
+                            ]
+                        ),
+                        
+                        # Segundo gráfico: Experience vs Performance
+                        html.Div(
+                            style={
+                                'backgroundColor': 'rgba(18,18,26,.5)',
+                                'borderRadius': '15px',
+                                'border': '1px solid #4A4A4A',
+                                'padding': '20px'
+                            },
+                            children=[
+                                html.H3(
+                                    "Experience vs Performance", 
+                                    style={
+                                        'color': 'white',
+                                        'textAlign': 'center',
+                                        'marginBottom': '20px',
+                                        'fontWeight': '700'
+                                    }
+                                ),
+                                dcc.Graph(
+                                    id='irating-starts-scatter',
+                                    style={'height': '400px'},  # Aumentamos altura ya que ahora ocupa todo el ancho
+                                    config={'displayModeBar': False}
+                                )
+                            ]
                         )
                     ]
                 )
             ]
         ),
         
-        # Componentes ocultos
-        # --- ELIMINA EL dcc.Store ---
+        # Componentes ocultos (sin cambios)
         dcc.Store(id='active-discipline-store', data='ROAD.csv'),
         dcc.Store(id='shared-data-store', data={}),
         dcc.Store(id='shared-data-store_1', data={}),
@@ -1111,7 +1503,7 @@ app.layout = html.Div(
 )
 def update_right_column_graphs(filename):
     # 1. Cargar y procesar los datos de la disciplina seleccionada
-    df_discipline = pd.read_csv(filename)
+    df_discipline = DISCIPLINE_DATAFRAMES[filename]
     df_discipline = df_discipline[df_discipline['IRATING'] > 1]
     df_discipline = df_discipline[df_discipline['STARTS'] > 1]
     df_discipline = df_discipline[df_discipline['CLASS'].str.contains('D|C|B|A|P|R', na=False)]
@@ -1124,56 +1516,158 @@ def update_right_column_graphs(filename):
     top_regions.insert(0, '#', range(1, 1 + len(top_regions)))
     top_countries.insert(0, '#', range(1, 1 + len(top_countries)))
 
-    # --- MODIFICACIÓN: Traducir códigos de país a nombres completos ---
+    # Traducir códigos de país a nombres completos
     def get_country_name(code):
         try:
             return pycountry.countries.get(alpha_2=code).name
         except (LookupError, AttributeError):
-            return code # Devuelve el código si no se encuentra
+            return code
 
     top_countries['LOCATION'] = top_countries['LOCATION'].apply(get_country_name)
-    # --- FIN DE LA MODIFICACIÓN ---
 
+    # ESTILOS CORREGIDOS - Control estricto de ancho
     table_style_base = {
-        'style_table': {'borderRadius': '10px', 'overflow': 'hidden', 'border': '1px solid #4A4A4A','backgroundColor': 'rgba(11,11,19,1)'},
-        'style_cell': {'textAlign': 'center', 'padding': '0px', 'backgroundColor': 'rgba(11,11,19,1)', 'color': 'rgb(255, 255, 255,.8)', 'border': 'none', 'font_size': '10px','textOverflow': 'ellipsis',
-        'whiteSpace': 'normal'},
-        'style_header': {'backgroundColor': 'rgba(30,30,38,1)', 'fontWeight': 'bold', 'color': 'white', 'border': 'none', 'textAlign': 'center'},
+        'style_table': {
+            'borderRadius': '10px', 
+            'overflow': 'hidden', 
+            'border': '1px solid #4A4A4A',
+            'backgroundColor': 'rgba(11,11,19,1)',
+            'height': '350px',
+            'overflowY': 'auto',
+            'overflowX': 'hidden',  # CLAVE: Prevenir scroll horizontal
+            'width': '100%',
+            'maxWidth': '100%'  # CLAVE: Forzar límite de ancho
+        },
+        'style_cell': {
+            'textAlign': 'center', 
+            'padding': '6px 4px',  # Padding más compacto
+            'backgroundColor': 'rgba(11,11,19,1)', 
+            'color': 'rgb(255, 255, 255,.8)', 
+            'border': 'none', 
+            'fontSize': '11px',  # Fuente más pequeña
+            'textOverflow': 'ellipsis',
+            'whiteSpace': 'nowrap',
+            'overflow': 'hidden',
+            'maxWidth': '0'  # CLAVE: Forzar truncado de texto
+        },
+        'style_header': {
+            'backgroundColor': 'rgba(30,30,38,1)', 
+            'fontWeight': 'bold', 
+            'color': 'white', 
+            'border': 'none', 
+            'textAlign': 'center',
+            'fontSize': '12px',
+            'padding': '6px 4px',
+            'overflow': 'hidden',
+            'textOverflow': 'ellipsis'
+        },
         'style_cell_conditional': [
-            {'if': {'column_id': '#'}, 'width': '10%', 'textAlign': 'center'},
-            {'if': {'column_id': 'REGION'}, 'width': '50%', 'textAlign': 'center'},
-            {'if': {'column_id': 'LOCATION'}, 'width': '50%', 'textAlign': 'center'},
-            {'if': {'column_id': 'avg_irating'}, 'width': '40%', 'textAlign': 'center'},
+            {'if': {'column_id': '#'}, 'width': '10%', 'minWidth': '10%', 'maxWidth': '10%'},
+            {'if': {'column_id': 'REGION'}, 'width': '60%', 'minWidth': '60%', 'maxWidth': '60%', 'textAlign': 'left'},
+            {'if': {'column_id': 'LOCATION'}, 'width': '60%', 'minWidth': '60%', 'maxWidth': '60%', 'textAlign': 'left'},
+            {'if': {'column_id': 'avg_irating'}, 'width': '30%', 'minWidth': '30%', 'maxWidth': '30%'},
         ]
     }
 
+    # CONTENEDOR CON CONTROL ESTRICTO DE ANCHO
     competitiveness_tables = html.Div(
-        style={'display': 'flex', 'gap': '3%', 'marginTop': '1%'},
+        style={
+            'display': 'grid',
+            'gridTemplateColumns': '1fr 1fr',
+            'gap': '15px',  # Gap más pequeño
+            'width': '100%',
+            'maxWidth': '100%',
+            'overflow': 'hidden',
+            'boxSizing': 'border-box'  # CLAVE: Incluir padding en el ancho
+        },
         children=[
-            html.Div(dash_table.DataTable(
-                columns=[{'name': '#', 'id': '#'}, {'name': 'Top Regions', 'id': 'REGION'}, {'name': 'AVG iRating', 'id': 'avg_irating'}],
-                data=top_regions.to_dict('records'),
-                # --- MODIFICACIÓN: Añadimos paginación nativa ---
-                page_action='native', # Activa la paginación
-                page_size=5,          # Muestra 5 filas por página
-                # --- FIN DE LA MODIFICACIÓN ---
-                style_table={**table_style_base['style_table'], 'height': '20vh'},
-                style_cell=table_style_base['style_cell'],
-                style_header=table_style_base['style_header'],
-                style_cell_conditional=table_style_base['style_cell_conditional']
-            ), style={'width': '49%'}),
-            html.Div(dash_table.DataTable(
-                columns=[{'name': '#', 'id': '#'}, {'name': 'Top Countries', 'id': 'LOCATION'}, {'name': 'AVG iRating', 'id': 'avg_irating'}],
-                data=top_countries.to_dict('records'),
-                # --- MODIFICACIÓN: Añadimos paginación nativa ---
-                page_action='native', # Activa la paginación
-                page_size=5,          # Muestra 5 filas por página
-                # --- FIN DE LA MODIFICACIÓN ---
-                style_table={**table_style_base['style_table'], 'height': '20vh'},
-                style_cell=table_style_base['style_cell'],
-                style_header=table_style_base['style_header'],
-                style_cell_conditional=table_style_base['style_cell_conditional']
-            ), style={'width': '49%'})
+            # Tabla de Regiones
+            html.Div(
+                style={
+                    'width': '100%',
+                    'maxWidth': '100%',
+                    'overflow': 'hidden',
+                    'boxSizing': 'border-box'  # CLAVE: Control de ancho
+                },
+                children=[
+                    html.H4(
+                        "Top Regions", 
+                        style={
+                            'color': 'white', 
+                            'textAlign': 'center', 
+                            'marginBottom': '10px',
+                            'fontSize': '14px',
+                            'margin': '0 0 10px 0'
+                        }
+                    ),
+                    html.Div(
+                        style={
+                            'width': '100%',
+                            'maxWidth': '100%',
+                            'overflow': 'hidden'
+                        },
+                        children=[
+                            dash_table.DataTable(
+                                columns=[
+                                    {'name': '#', 'id': '#'}, 
+                                    {'name': 'Region', 'id': 'REGION'}, 
+                                    {'name': 'Avg iRating', 'id': 'avg_irating', 'type': 'numeric', 'format': {'specifier': '.0f'}}
+                                ],
+                                data=top_regions.to_dict('records'),
+                                page_action='none',
+                                style_table=table_style_base['style_table'],
+                                style_cell=table_style_base['style_cell'],
+                                style_header=table_style_base['style_header'],
+                                style_cell_conditional=table_style_base['style_cell_conditional']
+                            )
+                        ]
+                    )
+                ]
+            ),
+            
+            # Tabla de Países
+            html.Div(
+                style={
+                    'width': '100%',
+                    'maxWidth': '100%',
+                    'overflow': 'hidden',
+                    'boxSizing': 'border-box'  # CLAVE: Control de ancho
+                },
+                children=[
+                    html.H4(
+                        "Top Countries", 
+                        style={
+                            'color': 'white', 
+                            'textAlign': 'center', 
+                            'marginBottom': '10px',
+                            'fontSize': '14px',
+                            'margin': '0 0 10px 0'
+                        }
+                    ),
+                    html.Div(
+                        style={
+                            'width': '100%',
+                            'maxWidth': '100%',
+                            'overflow': 'hidden'
+                        },
+                        children=[
+                            dash_table.DataTable(
+                                columns=[
+                                    {'name': '#', 'id': '#'}, 
+                                    {'name': 'Country', 'id': 'LOCATION'}, 
+                                    {'name': 'Avg iRating', 'id': 'avg_irating', 'type': 'numeric', 'format': {'specifier': '.0f'}}
+                                ],
+                                data=top_countries.to_dict('records'),
+                                page_action='none',
+                                style_table=table_style_base['style_table'],
+                                style_cell=table_style_base['style_cell'],
+                                style_header=table_style_base['style_header'],
+                                style_cell_conditional=table_style_base['style_cell_conditional']
+                            )
+                        ]
+                    )
+                ]
+            )
         ]
     )
 
@@ -1183,8 +1677,6 @@ def update_right_column_graphs(filename):
 
     # 4. Devolver todos los componentes actualizados
     return competitiveness_tables, bubble_chart_fig, line_chart_fig
-
-
 
 
 
@@ -1282,7 +1774,7 @@ def update_country_filter_on_map_click(clickData):
 def update_pilot_search_options(search_value, current_selected_pilot, region_filter, country_filter, active_discipline_filename):
     # --- MODIFICACIÓN: Cargamos el DataFrame correcto al inicio de la función ---
     # 1. Cargar los datos de la disciplina actual
-    df_current_discipline = pd.read_csv(active_discipline_filename)
+    df_current_discipline = DISCIPLINE_DATAFRAMES[active_discipline_filename]
     # Aplicamos los mismos filtros iniciales que en el callback principal
     df_current_discipline = df_current_discipline[df_current_discipline['IRATING'] > 1]
     df_current_discipline = df_current_discipline[df_current_discipline['STARTS'] > 1]
@@ -1443,8 +1935,8 @@ def update_button_styles(formula_clicks, road_clicks, oval_clicks, dirt_road_cli
 def update_table_and_search(
     region_filter, country_filter, selected_pilot,
     page_current, page_size, sort_by, state_active_cell,
-    active_discipline_filename, # <-- Nuevo argumento desde el State
-    discipline_change_trigger # <-- Nuevo argumento desde el Input
+    active_discipline_filename,
+    discipline_change_trigger
 ):
     
     ctx = dash.callback_context
@@ -1458,22 +1950,8 @@ def update_table_and_search(
     # Leemos y procesamos el archivo seleccionado
     #df = pd.read_csv(filename)
     df = DISCIPLINE_DATAFRAMES[active_discipline_filename]
-    '''df = df[df['IRATING'] > 1]
-    df = df[df['STARTS'] > 1]
-    df = df[df['CLASS'].str.contains('D|C|B|A|P|R', na=False)]
 
-    country_to_region_map = {country: region for region, countries in iracing_ragions.items() for country in countries}
-    df['REGION'] = df['LOCATION'].map(country_to_region_map).fillna('International')
-    
-    df['Rank World'] = df['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
-    df['Rank Region'] = df.groupby('REGION')['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
-    df['Rank Country'] = df.groupby('LOCATION')['IRATING'].rank(method='first', ascending=False).fillna(0).astype(int)
-    
-    df['CLASS'] = df['CLASS'].str[0]'''
     df_for_graphs = df.copy() # Copia para gráficos que no deben ser filtrados
-
-    # --- 3. LÓGICA DE FILTRADO Y VISUALIZACIÓN (sin cambios) ---
-    # El resto de la función sigue igual, pero ahora opera sobre el 'df' que acabamos de cargar.
     
     # Lógica de columnas dinámicas
     base_cols = ['DRIVER', 'IRATING', 'LOCATION', 'REGION','CLASS', 'STARTS', 'WINS' ]
@@ -1519,16 +1997,14 @@ def update_table_and_search(
     elif triggered_id == 'pilot-search-dropdown' and selected_pilot:
         match_index = filtered_df.index.get_loc(df[df['DRIVER'] == selected_pilot].index[0])
         if match_index is not None:
-            target_page = match_index // page_size
+            target_page = match_index // 100  # CAMBIO: Usar 100 en lugar de page_size
             driver_column_index = list(filtered_df.columns).index('DRIVER')
             new_active_cell = {
-                'row': match_index % page_size,
-                'row_id': match_index % page_size,
+                'row': match_index % 100,  # CAMBIO: Usar 100 en lugar de page_size
+                'row_id': match_index % 100,  # CAMBIO: Usar 100
                 'column': driver_column_index,
                 'column_id': 'DRIVER'
             }
-
-   
 
     # --- 5. GENERACIÓN DE COLUMNAS PARA LA TABLA ---
     columns_definition = []
@@ -1545,8 +2021,8 @@ def update_table_and_search(
             columns_definition.append({"name": col_name.title(), "id": col_name})
 
     # --- 6. PAGINACIÓN ---
+    page_size = 100  # FORZAR: Siempre usar 100 elementos por página
     start_idx = target_page * page_size
-
     end_idx = start_idx + page_size
     
     # Aplicamos el formato de bandera a los datos de la página actual
@@ -1555,7 +2031,7 @@ def update_table_and_search(
     page_data = page_df.to_dict('records')
     
     total_pages = len(filtered_df) // page_size + (1 if len(filtered_df) % page_size > 0 else 0)
-
+    
     # --- 7. ACTUALIZACIÓN DE GRÁFICOS ---
     graph_indices = filtered_df.index
     highlight_irating = None
@@ -1700,21 +2176,9 @@ def update_active_cell_from_store(active_cell,ds,ds1,a,b):
         ds1 = ds
         return ds.get('active_cell'),ds1
 
-    
-    
-    
-    '''active_cell = a
-    selected_pilot = shared_data.get('selected_pilot', '')
-    print('..............')
-    print(shared_data)
-    
-    print(f"DEBUG: Recuperando active_cell del store: {active_cell}")
-    print(f"DEBUG: Piloto asociado: {selected_pilot}")
-    shared_data['shared_data'] = ''
-    
-    
-    return active_cell'''
-
 
 if __name__ == "__main__":
        app.run(debug=True)
+
+
+
