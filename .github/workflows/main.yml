@@ -18,18 +18,19 @@ jobs:
       contents: write  # Necesario para hacer push al repositorio
     
     steps:
-    # Paso 1: Descargar el código del repositorio
+    # Paso 1: Checkout de branch_actions (CAMBIO CLAVE)
     - name: 🚀 Checkout repository
       uses: actions/checkout@v4
       with:
+        ref: branch_actions  # 🔥 TRABAJAR EN ESTA RAMA
         token: ${{ secrets.GITHUB_TOKEN }}
     
     # Paso 2: Configurar Python
     - name: 🐍 Set up Python
-      uses: actions/setup-python@v5  # Actualizado a v5
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.11'  # Versión más reciente
-        cache: 'pip'  # Cache de pip para instalaciones más rápidas
+        python-version: '3.11'
+        cache: 'pip'
     
     # Paso 3: Instalar dependencias
     - name: 📦 Install dependencies
@@ -37,14 +38,21 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements-update.txt
     
+    # NUEVO PASO: Mostrar en qué rama estamos trabajando
+    - name: 🌟 Show current branch
+      run: |
+        echo "Current branch: $(git branch --show-current)"
+        echo "Repository: ${{ github.repository }}"
+        echo "Working in: branch_actions"
+    
     # Paso 4: Ejecutar el script de actualización
     - name: 📥 Update iRacing data
       env:
-        PASS: ${{ secrets.PASS }}  # Usar el secret que configuraste
+        PASS: ${{ secrets.PASS }}
       run: |
-        echo "Starting data update at $(date)"
+        echo "🔄 Starting data update on branch_actions at $(date)"
         python update_data.py
-        echo "Data update completed at $(date)"
+        echo "✅ Data update completed at $(date)"
     
     # Paso 5: Verificar si hay cambios en los datos
     - name: 🔍 Check for changes
@@ -67,29 +75,36 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action Bot"
     
-    # Paso 7: Subir los archivos actualizados al repositorio
-    - name: 📤 Commit and push updated data
+    # Paso 7: Commit y push a branch_actions (CAMBIO CLAVE)
+    - name: 📤 Commit and push to branch_actions
       if: steps.changes.outputs.has_changes == 'true'
       run: |
-        echo "Committing updated data files..."
+        echo "Committing updated data files to branch_actions..."
         git add data/
         git commit -m "🔄 Auto-update iRacing data - $(date '+%Y-%m-%d %H:%M:%S UTC')"
-        git push
-        echo "✅ Data files updated successfully!"
+        git push origin branch_actions  # 🔥 PUSH ESPECÍFICO A ESTA RAMA
+        echo "✅ Data files updated successfully in branch_actions!"
     
-    # Paso 8: Subir archivos como artifacts (usando v4 - LA CORRECCIÓN PRINCIPAL)
+    # Paso 8: Mostrar mensaje si no hay cambios
+    - name: ℹ️ No changes message
+      if: steps.changes.outputs.has_changes == 'false'
+      run: |
+        echo "📝 No changes detected in data files."
+        echo "🌟 branch_actions is up to date!"
+    
+    # Paso 9: Subir archivos como artifacts
     - name: 📋 Upload data files as artifacts
-      uses: actions/upload-artifact@v4  # ACTUALIZADO A v4
+      uses: actions/upload-artifact@v4
       with:
-        name: iracing-data-files-${{ github.run_number }}  # Nombre único
+        name: iracing-data-files-${{ github.run_number }}
         path: data/
         retention-days: 7
-        compression-level: 6  # Nueva opción en v4 para comprimir
+        compression-level: 6
     
-    # Paso 9: Mostrar estadísticas de los archivos actualizados
+    # Paso 10: Mostrar estadísticas de los archivos actualizados
     - name: 📊 Show file statistics
       run: |
-        echo "=== File Statistics ==="
+        echo "=== File Statistics (branch_actions) ==="
         if [ -d "data" ]; then
           for file in data/*.csv; do
             if [ -f "$file" ]; then
@@ -99,20 +114,19 @@ jobs:
         else
           echo "No data directory found"
         fi
-        echo "======================="
+        echo "========================================="
     
-    # Paso 10: Comentario en caso de fallo
+    # Paso 11: Comentario en caso de fallo
     - name: 💬 Comment on failure
       if: failure()
-      uses: actions/github-script@v7  # También actualizado
+      uses: actions/github-script@v7
       with:
         script: |
           const message = `❌ **iRacing Data Update Failed**
           
           The scheduled data update workflow failed at ${new Date().toISOString()}.
+          Target branch: branch_actions
           
           Please check the [workflow logs](${context.payload.repository.html_url}/actions/runs/${context.runId}) for details.`;
           
-          // Si hay un issue abierto para reportes de fallos, comentar ahí
-          // De lo contrario, este script está disponible para crear un issue automáticamente
           console.log('Workflow failed:', message);
