@@ -1,0 +1,71 @@
+name: Update iRacing Data
+
+on:
+  schedule:
+    # Ejecutar cada 2 horas (puedes cambiar esto)
+    #- cron: '0 */2 * * *'  # Cada 2 horas
+    - cron: '0 0 */1 * *'  # Cada día a medianoche
+    # - cron: '0 0 * * 0'    # Cada domingo a medianoche
+  
+  # También permitir ejecución manual desde GitHub
+  workflow_dispatch:
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # Paso 1: Descargar el código del repositorio
+    - name: 🚀 Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    # Paso 2: Configurar Python
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    # Paso 3: Instalar dependencias
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-update.txt
+    
+    # Paso 4: Ejecutar el script de actualización
+    - name: 📥 Update iRacing data
+      env:
+        PASS: ${{ secrets.PASS }}  # Usar el secret que configuraste
+      run: |
+        echo "Starting data update..."
+        python update_data.py
+        echo "Data update completed!"
+    
+    # Paso 5: Configurar Git para el commit
+    - name: ⚙️ Configure Git
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+    
+    # Paso 6: Subir los archivos actualizados al repositorio
+    - name: 📤 Commit and push updated data
+      run: |
+        # Verificar si hay cambios
+        if git diff --quiet data/; then
+          echo "No changes detected in data files"
+        else
+          echo "Changes detected, committing..."
+          git add data/
+          git commit -m "🔄 Auto-update iRacing data - $(date '+%Y-%m-%d %H:%M:%S UTC')"
+          git push
+          echo "Data files updated successfully!"
+        fi
+    
+    # Paso 7: Subir archivos como artifacts (opcional, para debug)
+    - name: 📋 Upload data files as artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: iracing-data-files
+        path: data/
+        retention-days: 7
