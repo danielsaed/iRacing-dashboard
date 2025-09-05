@@ -1,142 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap'); /* <-- MODIFICACIÓN: Añadimos ;900 */
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap');
 
 
 body {
-  margin: 5px;
+  margin: 0;
   padding: 0;
   background-color: rgba(5,5,15,255);
   color: #ffffff;
-  font-family: 'Lato', sans-serif; /* <-- AÑADE ESTA LÍNEA */
-  font-weight: 500; /* <-- AÑADE ESTA LÍNEA para usar el grosor "Black" */
-}
-
-p {
-   margin-bottom: 0;
-   text-align : center;
-}
-
-#main-content-container {
-    flex-direction: row; /* Las columnas están una al lado de la otra */
-}
-
-#left-column, #middle-column, #right-column {
-    height: 100%; /* Ocupan toda la altura disponible */
-}
-
-
-/* Media Query para pantallas medianas y pequeñas (1200px o menos) */
-@media (max-width: 1200px) {
-    /* Cambiamos la dirección del contenedor principal a vertical */
-    #main-content-container {
-        flex-direction: column; /* Las columnas se apilan una encima de la otra */
-        overflow-y: auto; /* Añadimos scroll vertical para toda la página */
-    }
-
-    /* Hacemos que cada columna ocupe todo el ancho disponible */
-    #left-column, #middle-column, #right-column {
-        width: 98% !important; /* Usamos !important para sobreescribir el estilo en línea de Python */
-        height: auto !important; /* La altura se ajusta al contenido */
-        min-height: 60vh; /* Damos una altura mínima para que los gráficos se vean bien */
-        margin: 1%;
-    }
-
-    /* Ajustamos la altura de la tabla para que no sea excesiva en vista móvil/vertical */
-    #datatable-interactiva .dash-spreadsheet-container {
-        height: 60vh !important; 
-    }
-}
-
-/* --- ESTILOS PARA LA TABLA INTERACTIVA --- */
-
-/* Seleccionamos las celdas de datos de la tabla */
-#datatable-interactiva .dash-cell {
-    /* 
-     * TIPOGRAFÍA FLUIDA (LA CLAVE DE LA SOLUCIÓN)
-     * clamp(MIN, IDEAL, MAX)
-     * - MIN (8px): El tamaño de fuente NUNCA será menor de 8px.
-     * - IDEAL (0.6vw): El tamaño ideal será el 0.6% del ANCHO de la ventana.
-     *   Esto hace que la fuente se encoja al reducir la ventana.
-     * - MAX (12px): El tamaño de fuente NUNCA será mayor de 12px.
-    */
-    font-size: clamp(8px, 0.6vw, 12px) !important;
-    
-    /* Ajustamos el padding para que las celdas no se sientan apretadas */
-    padding: 1px 1px !important;
-}
-
-/* Hacemos lo mismo para la cabecera de la tabla */
-#datatable-interactiva .dash-header {
-    font-size: clamp(9px, 0.7vw, 10px) !important;
-    padding: 2px 1px !important;
-}
-
-/* --- ESTILOS PARA LOS DROPDOWNS Y LABELS (OPCIONAL PERO RECOMENDADO) --- */
-
-/* Hacemos que los filtros también sean un poco responsivos */
-.iracing-dropdown, .iracing-dropdown .Select-value-label, .iracing-dropdown .Select-placeholder {
-    font-size: clamp(10px, 0.8vw, 10px) !important;
-}
-
-label {
-    font-size: clamp(11px, 0.8vw, 12px) !important;
-}
-
-/* --- REGLA ESPECÍFICA PARA LA COLUMNA REGION --- */
-/* Seleccionamos solo las celdas que pertenecen a la columna 'REGION' */
-#datatable-interactiva .dash-cell[data-dash-column="REGION"] {
-    font-size: 10px !important; /* ¡Aquí sí funcionará! */
-}
-
-#datatable-interactiva .dash-cell[data-dash-column="DRIVER"] {
-    font-size: 10px !important; /* ¡Aquí sí funcionará! */
-}
-
-#datatable-interactiva .dash-cell[data-dash-column="CLASS"] {
-    font-size: 12px !important; /* ¡Aquí sí funcionará! */
-}
-#datatable-interactiva .dash-cell[data-dash-column="IRATING"] {
-    font-size: 10px !important; /* ¡Aquí sí funcionará! */
-}
-#datatable-interactiva .dash-cell[data-dash-column="STARTS"] {
-    font-size: 10px !important; /* ¡Aquí sí funcionará! */
-}
-#datatable-interactiva .dash-cell[data-dash-column="WINS"] {
-    font-size: 10px !important; /* ¡Aquí sí funcionará! */
-}
-
-/* --- ESTILOS PARA LOS BOTONES DEL TIPO DE TABLERO --- */
-.dashboard-type-button {
-    background-color: rgba(18,18,26,.5);
-    color: white;
-    border: 1px solid #4A4A4A;
-    padding: 8px 8px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-weight: bold;
-    /* --- AJUSTES PARA TAMAÑO Y TRANSICIÓN --- */
-    width: 80px; /* Ancho fijo para todos los botones */
-    text-align: center;
-    transition: background-color 0.2s, border-color 0.2s;
-}
-
-.dashboard-type-button:hover {
-    background-color: #4A4A4A;
-}
-
-/* Estilo para los dropdowns de filtros cuando están activos */
-.iracing-dropdown.active-filter .Select-control {
-    background-color: rgba(0, 111, 255, 0.25) !important;
-    border: 1px solid rgba(0, 111, 255, 0.7) !important;
-}
-
-/* Opcional: Cambia el color del texto y la flecha para que se vea mejor */
-.iracing-dropdown.active-filter .Select-placeholder,
-.iracing-dropdown.active-filter .Select-value-label {
-    color: #FFFFFF;
-}
-
-.iracing-dropdown.active-filter .Select-arrow {
-    border-top-color: #FFFFFF;
+  font-family: 'Lato', sans-serif;
+  font-weight: 500;
+  animation: fadeIn 0.8s ease-in-out;
 }
 
 @keyframes fadeIn {
@@ -144,69 +16,399 @@ label {
   to { opacity: 1; }
 }
 
-/* Aplicamos la animación al cuerpo del HTML */
-body {
-  animation: fadeIn 0.8s ease-in-out;
+/* RESPONSIVE DESIGN PARA EL NUEVO LAYOUT */
+
+/* Diseño responsive para la sección de filtros y tabla */
+@media (max-width: 1024px) {
+  /* Filtros y tabla se vuelven verticales en tablets */
+  .filters-table-container {
+    flex-direction: column !important;
+  }
+  
+  .filters-table-container > div {
+    min-width: 100% !important;
+    max-width: 100% !important;
+  }
 }
 
-/* --- ESTILOS DEFINITIVOS PARA DROPDOWNS --- */
+@media (max-width: 768px) {
+  /* Contenedor principal con menos padding en móvil */
+  .main-container {
+    padding: 10px 3vw !important;
+  }
+  
+  /* Grid de gráficos adicionales en una sola columna */
+  .additional-charts-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Ajustar títulos para móvil */
+  h1 {
+    font-size: clamp(28px, 8vw, 36px) !important;
+  }
+  
+  h3 {
+    font-size: clamp(16px, 4vw, 20px) !important;
+  }
+  
+  /* Botones más pequeños en móvil */
+  .dashboard-type-button {
+    width: 70px !important;
+    font-size: 10px !important;
+    padding: 6px 4px !important;
+  }
+  
+  /* KPIs overlay más pequeño en móvil */
+  .kpi-overlay {
+    width: 95% !important;
+    top: 10px !important;
+  }
+}
 
-/* 1. Color del texto del placeholder (ej: "Buscar Piloto...") */
+@media (max-width: 480px) {
+  /* Contenedor muy compacto para móviles pequeños */
+  .main-container {
+    padding: 5px 2vw !important;
+    gap: 15px !important;
+  }
+  
+  /* Secciones con menos padding */
+  .section-container {
+    padding: 10px !important;
+  }
+  
+  /* Filtros en columna única */
+  .filters-row {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+}
+
+/* ESTILOS PARA LOS BOTONES DEL TIPO DE TABLERO */
+.dashboard-type-button {
+    background-color: rgba(18,18,26,.5);
+    color: white;
+    border: 1px solid #4A4A4A;
+    padding: 8px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    width: 100px;
+    text-align: center;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.dashboard-type-button:hover {
+    background-color: rgba(0, 111, 255, 0.3);
+    border-color: rgb(0, 111, 255);
+}
+
+/* ESTILOS PARA DROPDOWNS ACTIVOS */
+.iracing-dropdown.active-filter .Select-control {
+    background-color: rgba(0, 111, 255, 0.25) !important;
+    border: 1px solid rgba(0, 111, 255, 0.7) !important;
+    box-shadow: 0 0 10px rgba(0, 111, 255, 0.3) !important;
+}
+
+.iracing-dropdown.active-filter .Select-placeholder,
+.iracing-dropdown.active-filter .Select-value-label {
+    color: #FFFFFF !important;
+}
+
+.iracing-dropdown.active-filter .Select-arrow {
+    border-top-color: #FFFFFF !important;
+}
+
+/* ESTILOS PARA LA TABLA INTERACTIVA */
+#datatable-interactiva .dash-cell {
+    font-size: clamp(8px, 0.6vw, 12px) !important;
+    padding: 1px 1px !important;
+}
+
+#datatable-interactiva .dash-header {
+    font-size: clamp(9px, 0.7vw, 10px) !important;
+    padding: 2px 1px !important;
+}
+
+/* ESTILOS ESPECÍFICOS POR COLUMNA */
+#datatable-interactiva .dash-cell[data-dash-column="REGION"] {
+    font-size: 10px !important;
+}
+
+#datatable-interactiva .dash-cell[data-dash-column="DRIVER"] {
+    font-size: 10px !important;
+}
+
+#datatable-interactiva .dash-cell[data-dash-column="CLASS"] {
+    font-size: 12px !important;
+}
+
+#datatable-interactiva .dash-cell[data-dash-column="IRATING"] {
+    font-size: 10px !important;
+}
+
+#datatable-interactiva .dash-cell[data-dash-column="STARTS"] {
+    font-size: 10px !important;
+}
+
+#datatable-interactiva .dash-cell[data-dash-column="WINS"] {
+    font-size: 10px !important;
+}
+
+/* ESTILOS PARA DROPDOWNS Y LABELS */
+.iracing-dropdown, 
+.iracing-dropdown .Select-value-label, 
 .iracing-dropdown .Select-placeholder {
-  color: rgba(255, 255, 255, 1) !important;
+    font-size: clamp(10px, 0.8vw, 14px) !important;
 }
 
-/* 2. Color del texto que se escribe en el buscador */
-.iracing-dropdown .Select-input > input {
-  color: white !important;
+label {
+    font-size: clamp(11px, 0.8vw, 14px) !important;
 }
 
-/* 3. Color del texto del piloto una vez que ha sido seleccionado */
-.iracing-dropdown .Select-value-label {
-  color: white !important;
-}
-
-#competitiveness-tables-container .dash-spreadsheet-inner::-webkit-scrollbar-thumb:hover {
-  background-color: #6c6c6c; /* Se aclara para dar feedback visual */
-}
-
-/* --- ESTILOS PARA LA PAGINACIÓN DARK MODE DE LAS TABLAS TOP --- */
-
-/* Contenedor principal de la paginación */
+/* ESTILOS PARA LAS TABLAS DE COMPETITIVIDAD */
 #competitiveness-tables-container .pagination {
-  justify-content: center; /* Centra los botones de página */
+  justify-content: center;
   margin-top: 5px;
   margin-bottom: 0;
 }
 
-/* Estilo general para cada botón de paginación */
 #competitiveness-tables-container .page-item .page-link {
-  background-color: rgba(11,11,19,1); /* Fondo oscuro como las celdas */
-  color: rgb(255, 255, 255, .8);      /* Texto claro */
-  border: 1px solid #4A4A4A;          /* Borde sutil */
-  font-size: 12px;                    /* Texto más pequeño */
-  padding: 4px 10px;                  /* Padding reducido para hacerlo más compacto */
-  margin: 0 2px;                      /* Espacio entre botones */
-  border-radius: 4px;                 /* Bordes ligeramente redondeados */
+  background-color: rgba(11,11,19,1);
+  color: rgb(255, 255, 255, .8);
+  border: 1px solid #4A4A4A;
+  font-size: 12px;
+  padding: 4px 10px;
+  margin: 0 2px;
+  border-radius: 4px;
 }
 
-/* Estilo para los botones al pasar el ratón por encima (excepto el activo) */
 #competitiveness-tables-container .page-item:not(.active) .page-link:hover {
-  background-color: #323232; /* Un gris un poco más claro */
+  background-color: #323232;
   color: white;
 }
 
-/* Estilo para el botón de la página activa */
 #competitiveness-tables-container .page-item.active .page-link {
-  background-color: rgba(0, 111, 255, 0.5); /* Color de acento azul */
+  background-color: rgba(0, 111, 255, 0.5);
   border-color: rgb(0, 111, 255);
   color: white;
   font-weight: bold;
 }
 
-/* Estilo para los botones deshabilitados (ej. "Previous" en la primera página) */
 #competitiveness-tables-container .page-item.disabled .page-link {
   background-color: rgba(11,11,19,1);
-  color: #4A4A4A; /* Color de texto muy atenuado */
+  color: #4A4A4A;
   border-color: #323232;
+}
+
+/* ESTILOS ESPECÍFICOS PARA LAS TABLAS DE COMPETITIVIDAD */
+#competitiveness-tables-container .dash-table-container {
+    border-radius: 10px !important;
+    overflow: hidden !important;
+    max-width: 100% !important;
+}
+
+#competitiveness-tables-container .dash-spreadsheet-container {
+    max-height: 350px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
+
+#competitiveness-tables-container .dash-cell {
+    font-size: 12px !important;
+    padding: 6px 8px !important;
+    white-space: nowrap !important;
+    text-overflow: ellipsis !important;
+    overflow: hidden !important;
+}
+
+#competitiveness-tables-container .dash-header {
+    font-size: 13px !important;
+    font-weight: bold !important;
+    padding: 8px 6px !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
+}
+
+/* SCROLL PERSONALIZADO PARA LAS TABLAS DE COMPETITIVIDAD */
+#competitiveness-tables-container .dash-spreadsheet-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+#competitiveness-tables-container .dash-spreadsheet-container::-webkit-scrollbar-track {
+    background: rgba(30,30,38,1);
+    border-radius: 3px;
+}
+
+#competitiveness-tables-container .dash-spreadsheet-container::-webkit-scrollbar-thumb {
+    background: #4A4A4A;
+    border-radius: 3px;
+}
+
+#competitiveness-tables-container .dash-spreadsheet-container::-webkit-scrollbar-thumb:hover {
+    background: #6c6c6c;
+}
+
+/* RESPONSIVE: En móvil las tablas se vuelven verticales */
+@media (max-width: 768px) {
+    #competitiveness-tables-container > div {
+        grid-template-columns: 1fr !important;
+        gap: 15px !important;
+    }
+    
+    #competitiveness-tables-container .dash-spreadsheet-container {
+        max-height: 300px !important;
+    }
+}
+
+/* ASEGURAR QUE LOS CONTENEDORES NO SE SALGAN */
+.chart-card {
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+.chart-card > div {
+    max-width: 100% !important;
+    overflow: hidden !important;
+}
+
+/* UTILIDADES RESPONSIVE */
+.container-fluid {
+  max-width: 100%;
+  padding: 0;
+}
+
+.no-gutters {
+  margin: 0;
+  padding: 0;
+}
+
+/* SCROLLBAR PERSONALIZADO */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(18,18,26,.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #4A4A4A;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6c6c6c;
+}
+
+/* ESTILOS MEJORADOS PARA LA TABLA CON SCROLL */
+#datatable-interactiva .dash-table-container {
+    border-radius: 15px !important;
+    overflow: hidden !important;
+    max-height: 450px !important;
+}
+
+#datatable-interactiva .dash-spreadsheet-container {
+    max-height: 450px !important;
+    overflow-y: auto !important;
+    overflow-x: auto !important;
+}
+
+/* SCROLL PERSONALIZADO PARA LA TABLA PRINCIPAL */
+#datatable-interactiva .dash-spreadsheet-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+#datatable-interactiva .dash-spreadsheet-container::-webkit-scrollbar-track {
+    background: rgba(30,30,38,1);
+    border-radius: 4px;
+}
+
+#datatable-interactiva .dash-spreadsheet-container::-webkit-scrollbar-thumb {
+    background: #4A4A4A;
+    border-radius: 4px;
+}
+
+#datatable-interactiva .dash-spreadsheet-container::-webkit-scrollbar-thumb:hover {
+    background: #6c6c6c;
+}
+
+#datatable-interactiva .dash-spreadsheet-container::-webkit-scrollbar-corner {
+    background: rgba(30,30,38,1);
+}
+
+/* ASEGURAR QUE EL HEADER PERMANEZCA VISIBLE */
+#datatable-interactiva .dash-header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
+    background-color: rgba(30,30,38,1) !important;
+}
+
+/* ESTILOS MEJORADOS PARA LOS KPIs VERTICALES DEL PILOTO */
+#kpi-pilot .main-svg {
+    background: rgba(0,0,0,0) !important;
+}
+
+#kpi-pilot .indicator {
+    text-align: center !important;
+}
+
+/* RESPONSIVE: Ajustar en móvil */
+@media (max-width: 768px) {
+    #datatable-interactiva .dash-spreadsheet-container {
+        max-height: 400px !important;
+    }
+    
+    /* KPIs del piloto más compactos en móvil */
+    #kpi-pilot {
+        height: 220px !important;
+    }
+}
+
+/* ESTILOS PARA LA TABLA KPI DEL PILOTO */
+#kpi-pilot .dash-table-container {
+    background: transparent !important;
+    border: none !important;
+}
+
+#kpi-pilot .dash-spreadsheet-container {
+    background: transparent !important;
+    border: none !important;
+}
+
+#kpi-pilot .dash-cell {
+    background: transparent !important;
+    border: none !important;
+    font-family: 'Lato, sans-serif' !important;
+}
+
+#kpi-pilot .dash-header {
+    display: none !important;
+}
+
+/* Hover effect sutil para las filas de KPI */
+#kpi-pilot tr:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border-radius: 8px;
+    transition: background-color 0.2s ease;
+}
+
+/* Responsive para la tabla KPI */
+@media (max-width: 768px) {
+    #kpi-pilot {
+        height: 220px !important;
+    }
+    
+    #kpi-pilot .dash-cell {
+        padding: 8px 4px !important;
+        font-size: 12px !important;
+    }
+    
+    #kpi-pilot .dash-cell[data-dash-column="value"] {
+        font-size: 18px !important;
+    }
 }
