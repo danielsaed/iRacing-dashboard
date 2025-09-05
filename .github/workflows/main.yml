@@ -14,6 +14,9 @@ jobs:
   update-data:
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: write  # Necesario para hacer push al repositorio
+    
     steps:
     # Paso 1: Descargar el código del repositorio
     - name: 🚀 Checkout repository
@@ -23,9 +26,10 @@ jobs:
     
     # Paso 2: Configurar Python
     - name: 🐍 Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5  # Actualizado a v5
       with:
-        python-version: '3.9'
+        python-version: '3.11'  # Versión más reciente
+        cache: 'pip'  # Cache de pip para instalaciones más rápidas
     
     # Paso 3: Instalar dependencias
     - name: 📦 Install dependencies
@@ -38,34 +42,77 @@ jobs:
       env:
         PASS: ${{ secrets.PASS }}  # Usar el secret que configuraste
       run: |
-        echo "Starting data update..."
+        echo "Starting data update at $(date)"
         python update_data.py
-        echo "Data update completed!"
+        echo "Data update completed at $(date)"
     
-    # Paso 5: Configurar Git para el commit
-    - name: ⚙️ Configure Git
+    # Paso 5: Verificar si hay cambios en los datos
+    - name: 🔍 Check for changes
+      id: changes
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-    
-    # Paso 6: Subir los archivos actualizados al repositorio
-    - name: 📤 Commit and push updated data
-      run: |
-        # Verificar si hay cambios
         if git diff --quiet data/; then
+          echo "has_changes=false" >> $GITHUB_OUTPUT
           echo "No changes detected in data files"
         else
-          echo "Changes detected, committing..."
-          git add data/
-          git commit -m "🔄 Auto-update iRacing data - $(date '+%Y-%m-%d %H:%M:%S UTC')"
-          git push
-          echo "Data files updated successfully!"
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+          echo "Changes detected in data files"
+          echo "Changed files:"
+          git diff --name-only data/
         fi
     
-    # Paso 7: Subir archivos como artifacts (opcional, para debug)
+    # Paso 6: Configurar Git para el commit (solo si hay cambios)
+    - name: ⚙️ Configure Git
+      if: steps.changes.outputs.has_changes == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action Bot"
+    
+    # Paso 7: Subir los archivos actualizados al repositorio
+    - name: 📤 Commit and push updated data
+      if: steps.changes.outputs.has_changes == 'true'
+      run: |
+        echo "Committing updated data files..."
+        git add data/
+        git commit -m "🔄 Auto-update iRacing data - $(date '+%Y-%m-%d %H:%M:%S UTC')"
+        git push
+        echo "✅ Data files updated successfully!"
+    
+    # Paso 8: Subir archivos como artifacts (usando v4 - LA CORRECCIÓN PRINCIPAL)
     - name: 📋 Upload data files as artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4  # ACTUALIZADO A v4
       with:
-        name: iracing-data-files
+        name: iracing-data-files-${{ github.run_number }}  # Nombre único
         path: data/
         retention-days: 7
+        compression-level: 6  # Nueva opción en v4 para comprimir
+    
+    # Paso 9: Mostrar estadísticas de los archivos actualizados
+    - name: 📊 Show file statistics
+      run: |
+        echo "=== File Statistics ==="
+        if [ -d "data" ]; then
+          for file in data/*.csv; do
+            if [ -f "$file" ]; then
+              echo "📄 $(basename "$file"): $(wc -l < "$file") lines, $(du -h "$file" | cut -f1)"
+            fi
+          done
+        else
+          echo "No data directory found"
+        fi
+        echo "======================="
+    
+    # Paso 10: Comentario en caso de fallo
+    - name: 💬 Comment on failure
+      if: failure()
+      uses: actions/github-script@v7  # También actualizado
+      with:
+        script: |
+          const message = `❌ **iRacing Data Update Failed**
+          
+          The scheduled data update workflow failed at ${new Date().toISOString()}.
+          
+          Please check the [workflow logs](${context.payload.repository.html_url}/actions/runs/${context.runId}) for details.`;
+          
+          // Si hay un issue abierto para reportes de fallos, comentar ahí
+          // De lo contrario, este script está disponible para crear un issue automáticamente
+          console.log('Workflow failed:', message);
