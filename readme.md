@@ -2,7 +2,7 @@
 
 [![Hugging Face Spaces](https://img.shields.io/badge/🤗%20Hugging%20Face-Live%20Demo-blue)](https://daniel-saed-top-irating.hf.space/)
 
-An interactive web dashboard designed to visualize and analyze iRating data from the popular racing simulator, iRacing.com. This tool provides a comprehensive overview of driver performance across different disciplines, regions, and countries, helping users understand the global landscape of iRacing talent.
+An interactive web dashboard designed to visualize and analyze iRating data from the racing simulator, iRacing.com. This tool provides a comprehensive overview of driver performance across different disciplines, regions, and countries, this features are not implemented on the simulator yet
 
 🚀 **Live Demo:** [**daniel-saed-top-irating.hf.space**](https://daniel-saed-top-irating.hf.space/)
 
