@@ -37,6 +37,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements-update.txt
+        pip install pydantic
     
     # NUEVO PASO: Mostrar en qué rama estamos trabajando
     - name: 🌟 Show current branch
