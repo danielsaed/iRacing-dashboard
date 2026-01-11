@@ -40,6 +40,18 @@ def load_and_process_data(filename):
     """Función para cargar y pre-procesar un archivo de disciplina."""
     print(f"Loading and processing {filename}...")
     df = pd.read_csv(filename)
+
+    # Nuevas columnas en mayúsculas
+    new_columns = [
+        'DRIVER', 'CUSTID', 'LOCATION', 'CLUB_NAME', 'STARTS', 'WINS', 
+        'AVG_START_POS', 'AVG_FINISH_POS', 'AVG_POINTS', 'TOP25PCNT', 
+        'LAPS', 'LAPSLEAD', 'AVG_INC', 'CLASS', 'IRATING', 'TTRATING', 
+        'TOT_CLUBPOINTS', 'CHAMPPOINTS'
+    ]
+
+    # Reemplazar las columnas (asumiendo que el orden es correcto)
+    if len(df.columns) == len(new_columns):
+        df.columns = new_columns
     '''filename_parquet = filename.replace('.csv', '.parquet')
     df = pd.read_parquet(filename_parquet)'''
     df = df[df['IRATING'] > 1]
@@ -64,12 +76,21 @@ def update_all_data():
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*60}")
     
-    files_to_update = ['ROAD.csv', 'FORMULA.csv', 'OVAL.csv', 'DROAD.csv', 'DOVAL.csv']
     
+    files_to_update = {
+    'ROAD.csv': 'https://raw.githubusercontent.com/danielsaed/iRacing-dashboard/refs/heads/branch_actions/data/ROAD.csv',
+    'FORMULA.csv': 'https://raw.githubusercontent.com/danielsaed/iRacing-dashboard/refs/heads/branch_actions/data/FORMULA.csv',
+    'OVAL.csv': 'https://raw.githubusercontent.com/danielsaed/iRacing-dashboard/refs/heads/branch_actions/data/OVAL.csv',
+    'DROAD.csv': 'https://raw.githubusercontent.com/danielsaed/iRacing-dashboard/refs/heads/branch_actions/data/DROAD.csv',
+    'DOVAL.csv': 'https://raw.githubusercontent.com/danielsaed/iRacing-dashboard/refs/heads/branch_actions/data/DOVAL.csv'
+    }
+
+
+
     for filename in files_to_update:
         try:
             print(f"🔄 Updating {filename}...")
-            new_data = load_and_process_data(filename)
+            new_data = load_and_process_data(files_to_update[filename])
             DISCIPLINE_DATAFRAMES[filename] = new_data
             print(f"✅ {filename} updated successfully! ({len(new_data)} records)")
         except Exception as e:
@@ -80,18 +101,19 @@ def update_all_data():
 
 # CARGA INICIAL
 DISCIPLINE_DATAFRAMES = {
-    'ROAD.csv': load_and_process_data('data/ROAD.csv'),
-    'FORMULA.csv': load_and_process_data('data/FORMULA.csv'),
-    'OVAL.csv': load_and_process_data('data/OVAL.csv'),
-    'DROAD.csv': load_and_process_data('data/DROAD.csv'),
-    'DOVAL.csv': load_and_process_data('data/DOVAL.csv')
+    'ROAD.csv': load_and_process_data('https://raw.githubusercontent.com/danielsaed/iRacing-dashboard/refs/heads/branch_actions/data/ROAD.csv'),
+    'FORMULA.csv': load_and_process_data('https://raw.githubusercontent.com/danielsaed/iRacing-dashboard/refs/heads/branch_actions/data/FORMULA.csv'),
+    'OVAL.csv': load_and_process_data('https://raw.githubusercontent.com/danielsaed/iRacing-dashboard/refs/heads/branch_actions/data/OVAL.csv'),
+    'DROAD.csv': load_and_process_data('https://raw.githubusercontent.com/danielsaed/iRacing-dashboard/refs/heads/branch_actions/data/DROAD.csv'),
+    'DOVAL.csv': load_and_process_data('https://raw.githubusercontent.com/danielsaed/iRacing-dashboard/refs/heads/branch_actions/data/DOVAL.csv')
 }
+
 
 # CONFIGURAR EL SCHEDULER
 scheduler = BackgroundScheduler()
 scheduler.add_job(
     func=update_all_data,
-    trigger=IntervalTrigger(hours=2),  # Ejecutar cada 2 horas
+    trigger=IntervalTrigger(hours=12),  # Ejecutar cada 2 horas
     id='data_update_job',
     name='Update iRacing Data',
     replace_existing=True
@@ -1188,7 +1210,15 @@ app.layout = html.Div(
                                         searchable=True,
                                         clearable=True,
                                         search_value=''
-                                    )
+                                    ),
+                                    # --- NUEVOS COMPONENTES PARA DEBOUNCING ---
+                                    dcc.Interval(
+                                        id='search-debounce-interval',
+                                        interval=400,  # 400ms de delay
+                                        n_intervals=0,
+                                        disabled=True  # Inicialmente deshabilitado
+                                    ),
+                                    dcc.Store(id='last-search-store', data='')
                                 ]),
                                 
                                 # NUEVA SECCIÓN: KPIs del piloto debajo de los filtros
@@ -1761,67 +1791,86 @@ def update_country_filter_on_map_click(clickData):
     # Devolvemos el código del país, que actualizará el valor del dropdown 'country-filter'.
     return country_code
 
+# CALLBACK 1: Inicia el temporizador de debouncing cuando el usuario escribe.
+@app.callback(
+    Output('search-debounce-interval', 'disabled'),
+    Input('pilot-search-dropdown', 'search_value')
+)
+def start_search_debounce(search_value):
+    # Si el texto de búsqueda es muy corto, deshabilita el temporizador.
+    if not search_value or len(search_value) < 3:
+        return True  # Deshabilitado
+    # Si hay texto válido, habilita el temporizador (se disparará en 400ms).
+    return False # Habilitado
+
+# CALLBACK 2: Ejecuta la búsqueda real cuando el temporizador se dispara.
 @app.callback(
     Output('pilot-search-dropdown', 'options'),
-    Input('pilot-search-dropdown', 'search_value'),
+    Output('last-search-store', 'data'),
+    Output('search-debounce-interval', 'disabled', allow_duplicate=True), # Deshabilita el timer después de usarlo
+    Input('search-debounce-interval', 'n_intervals'), # Se activa por el temporizador
+    State('pilot-search-dropdown', 'search_value'),
     State('pilot-search-dropdown', 'value'),
     State('region-filter', 'value'),
     State('country-filter', 'value'),
-    # --- MODIFICACIÓN: Añadimos el State para saber la disciplina activa ---
     State('active-discipline-store', 'data'),
-    prevent_initial_call=True,
+    State('last-search-store', 'data'),
+    prevent_initial_call=True
 )
-def update_pilot_search_options(search_value, current_selected_pilot, region_filter, country_filter, active_discipline_filename):
-    # --- MODIFICACIÓN: Cargamos el DataFrame correcto al inicio de la función ---
-    # 1. Cargar los datos de la disciplina actual
-    df_current_discipline = DISCIPLINE_DATAFRAMES[active_discipline_filename]
-    # Aplicamos los mismos filtros iniciales que en el callback principal
-    df_current_discipline = df_current_discipline[df_current_discipline['IRATING'] > 1]
-    df_current_discipline = df_current_discipline[df_current_discipline['STARTS'] > 1]
-    df_current_discipline = df_current_discipline[df_current_discipline['CLASS'].str.contains('D|C|B|A|P|R', na=False)]
+def update_pilot_search_options_debounced(n, search_value, current_selected_pilot, 
+                                         region_filter, country_filter, active_discipline_filename, 
+                                         last_search):
     
-    # Asignamos la región para poder filtrar por ella
-    country_to_region_map = {country: region for region, countries in iracing_ragions.items() for country in countries}
-    df_current_discipline['REGION'] = df_current_discipline['LOCATION'].map(country_to_region_map).fillna('International')
-    # --- FIN DE LA MODIFICACIÓN ---
+    # --- OPTIMIZACIONES CLAVE ---
+    # 1. Si la búsqueda es inválida o es la misma que la anterior, no hacer nada.
+    if not search_value or len(search_value) < 3 or search_value == last_search:
+        # Devolvemos dash.no_update para las opciones y el store, y deshabilitamos el timer.
+        return dash.no_update, dash.no_update, True
 
-    # Si no hay texto de búsqueda, pero ya hay un piloto seleccionado,
-    # nos aseguramos de que su opción esté disponible para que no desaparezca.
-    if not search_value:
-        if current_selected_pilot:
-            return [{'label': current_selected_pilot, 'value': current_selected_pilot}]
-        return []
+    print(f"🚀 EXECUTING OPTIMIZED SEARCH for: '{search_value}'")
+    
+    # --- LÓGICA DE BÚSQUEDA (sin cambios, pero ahora se ejecuta mucho menos) ---
+    df_current_discipline = DISCIPLINE_DATAFRAMES[active_discipline_filename]
 
-    # Mantenemos la optimización de no buscar con texto muy corto
-    if len(search_value) < 2:
-        return []
-
-    # 1. La lógica de filtrado ahora usa el DataFrame correcto
-    if not region_filter: region_filter = 'ALL'
-    if not country_filter: country_filter = 'ALL'
-
+    # Filtramos el DataFrame una sola vez
     filtered_df = df_current_discipline
-    if region_filter != 'ALL':
+    if region_filter and region_filter != 'ALL':
         filtered_df = filtered_df[filtered_df['REGION'] == region_filter]
-    if country_filter != 'ALL':
+    if country_filter and country_filter != 'ALL':
         filtered_df = filtered_df[filtered_df['LOCATION'] == country_filter]
 
-    # 2. La búsqueda de coincidencias no cambia
-    matches = filtered_df[filtered_df['DRIVER'].str.contains(search_value, case=False)]
-    top_matches = matches.nlargest(20, 'IRATING')
+    # Búsqueda de coincidencias (más eficiente en un DF ya filtrado)
+    # Usamos `na=False` para evitar errores con valores nulos
+    matches = filtered_df[filtered_df['DRIVER'].str.contains(search_value, case=False, na=False)]
+    
+    # OPTIMIZACIÓN: Devolvemos menos resultados para que la respuesta sea más ligera.
+    top_matches = matches.nlargest(15, 'IRATING') 
 
-    # 3. Creamos las opciones a partir de las coincidencias
     options = [{'label': row['DRIVER'], 'value': row['DRIVER']} 
                for _, row in top_matches.iterrows()]
 
-    # 4. LA CLAVE: Si el piloto ya seleccionado no está en la nueva lista de opciones
-    # (porque borramos el texto, por ejemplo), lo añadimos para que no se borre de la vista.
+    # Asegurarse de que el piloto seleccionado no desaparezca de las opciones
     if current_selected_pilot and not any(opt['value'] == current_selected_pilot for opt in options):
         options.insert(0, {'label': current_selected_pilot, 'value': current_selected_pilot})
     
-    print(f"DEBUG: Búsqueda de '{search_value}' encontró {len(options)} coincidencias.")
-    
-    return options
+    # Devolvemos las nuevas opciones, actualizamos el 'last_search' y deshabilitamos el timer.
+    return options, search_value, True
+
+# CALLBACK 3: Limpia las opciones si el usuario borra el texto.
+@app.callback(
+    Output('pilot-search-dropdown', 'options', allow_duplicate=True),
+    Input('pilot-search-dropdown', 'search_value'),
+    State('pilot-search-dropdown', 'value'),
+    prevent_initial_call=True
+)
+def clear_options_on_empty_search(search_value, current_selected_pilot):
+    if not search_value:
+        # Si no hay texto, solo muestra la opción del piloto seleccionado (si existe).
+        if current_selected_pilot:
+            return [{'label': current_selected_pilot, 'value': current_selected_pilot}]
+        return []
+    return dash.no_update
+
 
 # --- CALLBACK para limpiar la búsqueda si cambian los filtros ---
 @app.callback(

@@ -412,3 +412,26 @@ label {
         font-size: 18px !important;
     }
 }
+#pilot-search-dropdown .Select-input > input,
+#pilot-search-dropdown .Select-input input {
+    color: #FFFFFF !important;
+    background-color: transparent !important;
+    border: none !important;
+    outline: none !important;
+    font-family: 'Lato', sans-serif !important;
+    caret-color: #FFFFFF !important; /* Color del cursor de texto */
+}
+
+#pilot-search-dropdown .Select-input > input::placeholder {
+    color: #A0A0A0 !important;
+    opacity: 1 !important;
+}
+
+#pilot-search-dropdown .Select-placeholder {
+    color: #A0A0A0 !important;
+}
+
+#pilot-search-dropdown .Select-input > input:focus {
+    color: #FFFFFF !important;
+    background-color: rgba(11,11,19,1) !important;
+}
