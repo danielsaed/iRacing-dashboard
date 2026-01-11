@@ -1,3 +1,4 @@
 iracingdataapi
 pandas
 requests
+pydantic
